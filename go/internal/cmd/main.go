@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/mcdev12/dynasty/go/clients/sports_api_client"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/mcdev12/dynasty/go/clients"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 		log.Fatal("SPORTS_API_KEY environment variable is required")
 	}
 
-	client := clients.NewSportsApiClient(apiKey)
+	client := sports_api_client.NewSportsApiClient(apiKey)
 	teams, err := client.GetNFLTeams()
 	if err != nil {
 		log.Fatalf("Failed to get NFL teams: %v", err)

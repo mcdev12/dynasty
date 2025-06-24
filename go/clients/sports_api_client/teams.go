@@ -1,24 +1,9 @@
-package clients
+package sports_api_client
 
 import (
 	"encoding/json"
 	"fmt"
 )
-
-type SportsApiClient struct {
-	*BaseClient
-}
-
-func NewSportsApiClient(apiKey string) *SportsApiClient {
-	client := &SportsApiClient{
-		BaseClient: NewBaseClient("https://v1.american-football.api-sports.io"),
-	}
-
-	client.SetHeader("X-RapidAPI-Key", apiKey)
-	client.SetHeader("X-RapidAPI-Host", "v1.american-football.api-sports.io")
-
-	return client
-}
 
 type Country struct {
 	Name string `json:"name"`
@@ -47,8 +32,14 @@ type TeamsResponse struct {
 	Response   []Team                 `json:"response"`
 }
 
+
 func (c *SportsApiClient) GetNFLTeams() ([]Team, error) {
-	body, err := c.Get("/teams?league=1&season=2023")
+	return c.GetTeamsByLeagueAndSeason(NFLLeagueID, Season2024)
+}
+
+func (c *SportsApiClient) GetTeamsByLeagueAndSeason(leagueID, season string) ([]Team, error) {
+	endpoint := fmt.Sprintf("%s?league=%s&season=%s", TeamsEndpoint, leagueID, season)
+	body, err := c.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get teams: %w", err)
 	}
