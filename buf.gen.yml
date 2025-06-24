@@ -1,0 +1,20 @@
+# buf.gen.yaml (v2)
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: go/internal/genproto
+    opt:
+      - paths=source_relative
+  - remote: buf.build/connectrpc/go
+    out: go/internal/genproto
+    opt:
+      - paths=source_relative
+  # Protobuf-ES: emits TS message & enum types
+#  - local: protoc-gen-es
+#    out: js/web/src/genproto
+#    # Also generate any imported dependencies
+#    include_imports: true
+#    opt: target=ts
+inputs:
+  - directory: protobuf

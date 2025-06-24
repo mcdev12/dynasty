@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: protobuf
+    name: buf.build/mcdev12/lumo
+breaking:
+  use:
+    - FILE
+lint:
+  use:
+    - STANDARD
+deps:
+  - buf.build/bufbuild/protovalidate:v0.12.0
