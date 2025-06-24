@@ -9,7 +9,7 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=postgres
-      - DB_NAME=dynasty_db
+      - DB_NAME=dynasty
       - DB_SSLMODE=disable
     depends_on:
       postgres:
@@ -22,7 +22,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: lumo_db
+      POSTGRES_DB: dynasty
     ports:
       - "5432:5432"
     volumes:
