@@ -30,3 +30,10 @@ migrate-force:
 migrate-version:
 	@if [ -z "$(DATABASE_URL)" ]; then echo "DATABASE_URL is not set. Please set it in .env file"; exit 1; fi
 	migrate -path migrations -database "$(DATABASE_URL)" version
+
+
+.PHONY: grpcui
+# Start gRPC UI
+grpcui:
+	@echo "Starting grpcui..."
+	grpcui -plaintext localhost:8080

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/mcdev12/dynasty/go/internal/models"
 	"github.com/mcdev12/dynasty/go/internal/teams/db"
 )
 
@@ -33,7 +34,7 @@ func NewRepository(querier Querier) *Repository {
 }
 
 // CreateTeam creates a new team
-func (r *Repository) CreateTeam(ctx context.Context, req CreateTeamRequest) (*Team, error) {
+func (r *Repository) CreateTeam(ctx context.Context, req CreateTeamRequest) (*models.Team, error) {
 	params := r.createTeamRequestToParams(req)
 
 	dbTeam, err := r.queries.CreateTeam(ctx, params)
@@ -45,7 +46,7 @@ func (r *Repository) CreateTeam(ctx context.Context, req CreateTeamRequest) (*Te
 }
 
 // GetTeam retrieves a team by ID
-func (r *Repository) GetTeam(ctx context.Context, id uuid.UUID) (*Team, error) {
+func (r *Repository) GetTeam(ctx context.Context, id uuid.UUID) (*models.Team, error) {
 	pgUUID := pgtype.UUID{
 		Bytes: id,
 		Valid: true,
@@ -60,7 +61,7 @@ func (r *Repository) GetTeam(ctx context.Context, id uuid.UUID) (*Team, error) {
 }
 
 // GetTeamByExternalID retrieves a team by sport ID and external ID
-func (r *Repository) GetTeamByExternalID(ctx context.Context, sportID, externalID string) (*Team, error) {
+func (r *Repository) GetTeamByExternalID(ctx context.Context, sportID, externalID string) (*models.Team, error) {
 	params := db.GetTeamByExternalIDParams{
 		SportID:    sportID,
 		ExternalID: externalID,
@@ -75,13 +76,13 @@ func (r *Repository) GetTeamByExternalID(ctx context.Context, sportID, externalI
 }
 
 // ListTeamsBySport retrieves all teams for a specific sport
-func (r *Repository) ListTeamsBySport(ctx context.Context, sportID string) ([]Team, error) {
+func (r *Repository) ListTeamsBySport(ctx context.Context, sportID string) ([]models.Team, error) {
 	dbTeams, err := r.queries.ListTeamsBySport(ctx, sportID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list teams by sport: %w", err)
 	}
 
-	teams := make([]Team, len(dbTeams))
+	teams := make([]models.Team, len(dbTeams))
 	for i, dbTeam := range dbTeams {
 		teams[i] = *r.dbTeamToModel(dbTeam)
 	}
@@ -90,13 +91,13 @@ func (r *Repository) ListTeamsBySport(ctx context.Context, sportID string) ([]Te
 }
 
 // ListAllTeams retrieves all teams
-func (r *Repository) ListAllTeams(ctx context.Context) ([]Team, error) {
+func (r *Repository) ListAllTeams(ctx context.Context) ([]models.Team, error) {
 	dbTeams, err := r.queries.ListAllTeams(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all teams: %w", err)
 	}
 
-	teams := make([]Team, len(dbTeams))
+	teams := make([]models.Team, len(dbTeams))
 	for i, dbTeam := range dbTeams {
 		teams[i] = *r.dbTeamToModel(dbTeam)
 	}
@@ -105,7 +106,7 @@ func (r *Repository) ListAllTeams(ctx context.Context) ([]Team, error) {
 }
 
 // UpdateTeam updates an existing team
-func (r *Repository) UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTeamRequest) (*Team, error) {
+func (r *Repository) UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTeamRequest) (*models.Team, error) {
 	params := r.updateTeamRequestToParams(id, req)
 
 	dbTeam, err := r.queries.UpdateTeam(ctx, params)
@@ -197,8 +198,8 @@ func (r *Repository) updateTeamRequestToParams(id uuid.UUID, req UpdateTeamReque
 }
 
 // dbTeamToModel converts a database team to domain model
-func (r *Repository) dbTeamToModel(dbTeam db.Team) *Team {
-	team := &Team{
+func (r *Repository) dbTeamToModel(dbTeam db.Team) *models.Team {
+	team := &models.Team{
 		ID:         uuid.UUID(dbTeam.ID.Bytes),
 		SportID:    dbTeam.SportID,
 		ExternalID: dbTeam.ExternalID,

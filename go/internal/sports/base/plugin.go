@@ -1,13 +1,19 @@
 package base
 
 import (
+	"context"
 	"fmt"
 	"sync"
+
+	sportsapi "github.com/mcdev12/dynasty/go/clients/sports_api_client"
+	"github.com/mcdev12/dynasty/go/internal/models"
 )
 
 // SportPlugin defines the interface each sport plugin must implement.
 type SportPlugin interface {
 	Init() error
+	FetchTeams(ctx context.Context) ([]sportsapi.Team, error)
+	MapExternalTeam(apiTeam sportsapi.Team, sportID string) (*models.Team, error)
 
 	//DefaultScoringTemplates() map[string][]ScoringRule
 	//ValidateRoster(r *Roster) error
@@ -34,6 +40,7 @@ var (
 
 // RegisterPlugin adds a plugin implementation under a key.
 // It should be called in each sport plugin's init() function.
+// The plugin will be initialized later when retrieved.
 func RegisterPlugin(key string, plugin SportPlugin) error {
 	registryMu.Lock()
 	defer registryMu.Unlock()
@@ -42,9 +49,6 @@ func RegisterPlugin(key string, plugin SportPlugin) error {
 	}
 	if _, exists := registry[key]; exists {
 		return fmt.Errorf("plugin already registered for key %q", key)
-	}
-	if err := plugin.Init(); err != nil {
-		return fmt.Errorf("failed to init plugin %q: %w", key, err)
 	}
 	registry[key] = plugin
 	return nil
@@ -59,4 +63,18 @@ func GetPlugin(key string) (SportPlugin, error) {
 		return nil, fmt.Errorf("no sport plugin registered for key %q", key)
 	}
 	return plugin, nil
+}
+
+// InitializePlugin initializes a specific plugin.
+func InitializePlugin(key string) error {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	plugin, exists := registry[key]
+	if !exists {
+		return fmt.Errorf("no sport plugin registered for key %q", key)
+	}
+	if err := plugin.Init(); err != nil {
+		return fmt.Errorf("failed to init plugin %q: %w", key, err)
+	}
+	return nil
 }

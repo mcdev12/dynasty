@@ -1,14 +1,13 @@
 package nfl
 
 import (
+	"context"
 	"fmt"
-	"github.com/mcdev12/dynasty/go/internal/sports/base"
+	"os"
 
 	sportsapi "github.com/mcdev12/dynasty/go/clients/sports_api_client"
-	//"github.com/mcdev12/dynasty/internal/models"
-	//"github.com/mcdev12/dynasty/internal/sports/base"
-	//"github.com/mcdev12/dynasty/internal/sportsapi"
-	//_ "github.com/mcdev12/dynasty/internal/sports/nfl" // register plugin
+	"github.com/mcdev12/dynasty/go/internal/models"
+	"github.com/mcdev12/dynasty/go/internal/sports/base"
 )
 
 // NFLPlugin implements the SportPlugin interface for the NFL.
@@ -24,7 +23,7 @@ type Config struct {
 	PageSize   int    `yaml:"page_size"` // number of players per fetch
 }
 
-// init registers the NFL plugin with the base registry.
+// init registers the NFL plugin with the base registry (without initialization).
 func init() {
 	plugin := &NFLPlugin{}
 	if err := base.RegisterPlugin("nfl", plugin); err != nil {
@@ -34,13 +33,55 @@ func init() {
 
 // Init initializes the plugin, loading config and creating the API client.
 func (p *NFLPlugin) Init() error {
-	// Load config from YAML (skipped, use defaults or env)
-	// For brevity, use hard-coded defaults or environment vars.
+	// Get API key from environment
+	apiKey := os.Getenv("SPORTS_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("SPORTS_API_KEY environment variable is required for NFL plugin")
+	}
+
 	p.config = Config{
-		APIKey: "YOUR_API_KEY",
+		APIKey: apiKey,
 	}
 	p.api = sportsapi.NewSportsApiClient(p.config.APIKey)
 	return nil
+}
+
+// FetchTeams retrieves NFL teams from the external API
+func (p *NFLPlugin) FetchTeams(ctx context.Context) ([]sportsapi.Team, error) {
+	// Use the sports API client to get NFL teams
+	teams, err := p.api.GetNFLTeams()
+	if err != nil {
+		return nil, fmt.Errorf("nfl: failed to fetch teams from API: %w", err)
+	}
+
+	return teams, nil
+}
+
+// MapExternalTeam maps a sports API team to our internal teams domain model
+func (p *NFLPlugin) MapExternalTeam(apiTeam sportsapi.Team, sportID string) (*models.Team, error) {
+	team := &models.Team{
+		SportID:    sportID,
+		ExternalID: fmt.Sprintf("sportsapi_%d", apiTeam.ID), // Use API team ID as unique identifier
+		Name:       apiTeam.Name,
+		Code:       apiTeam.Code,
+		City:       apiTeam.City,
+	}
+
+	// Handle optional fields
+	if apiTeam.Coach != "" {
+		team.Coach = &apiTeam.Coach
+	}
+	if apiTeam.Owner != "" {
+		team.Owner = &apiTeam.Owner
+	}
+	if apiTeam.Stadium != "" {
+		team.Stadium = &apiTeam.Stadium
+	}
+	if apiTeam.Established != 0 {
+		team.EstablishedYear = &apiTeam.Established
+	}
+
+	return team, nil
 }
 
 // FetchPlayers retrieves NFL players updated since the given time.

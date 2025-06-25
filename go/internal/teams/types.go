@@ -1,25 +1,8 @@
 package teams
 
 import (
-	"time"
-
-	"github.com/google/uuid"
+	"github.com/mcdev12/dynasty/go/internal/models"
 )
-
-// Team represents a sports team in the system
-type Team struct {
-	ID              uuid.UUID  `json:"id"`
-	SportID         string     `json:"sport_id"`
-	ExternalID      string     `json:"external_id"`
-	Name            string     `json:"name"`
-	Code            string     `json:"code"`
-	City            string     `json:"city"`
-	Coach           *string    `json:"coach,omitempty"`
-	Owner           *string    `json:"owner,omitempty"`
-	Stadium         *string    `json:"stadium,omitempty"`
-	EstablishedYear *int       `json:"established_year,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-}
 
 // CreateTeamRequest represents the data needed to create a new team
 type CreateTeamRequest struct {
@@ -70,9 +53,9 @@ type PaginationParams struct {
 
 // TeamListResponse represents a paginated list of teams
 type TeamListResponse struct {
-	Teams      []Team `json:"teams"`
-	Total      int    `json:"total"`
-	Limit      int    `json:"limit"`
-	Offset     int    `json:"offset"`
-	HasMore    bool   `json:"has_more"`
+	Teams   []models.Team `json:"teams"`
+	Total   int           `json:"total"`
+	Limit   int           `json:"limit"`
+	Offset  int           `json:"offset"`
+	HasMore bool          `json:"has_more"`
 }
