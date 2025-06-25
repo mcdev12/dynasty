@@ -1,0 +1,348 @@
+package teams
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/google/uuid"
+	"github.com/mcdev12/dynasty/go/clients/sports_api_client"
+)
+
+// SportsAPIClient defines the interface for external sports API operations
+type SportsAPIClient interface {
+	GetNFLTeams() ([]sports_api_client.Team, error)
+}
+
+// TeamsRepository defines what the app layer needs from the repository
+type TeamsRepository interface {
+	CreateTeam(ctx context.Context, req CreateTeamRequest) (*Team, error)
+	GetTeam(ctx context.Context, id uuid.UUID) (*Team, error)
+	GetTeamByExternalID(ctx context.Context, sportID, externalID string) (*Team, error)
+	ListTeamsBySport(ctx context.Context, sportID string) ([]Team, error)
+	ListAllTeams(ctx context.Context) ([]Team, error)
+	UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTeamRequest) (*Team, error)
+	DeleteTeam(ctx context.Context, id uuid.UUID) error
+}
+
+// SyncResult represents the result of syncing teams from external API
+type SyncResult struct {
+	TotalProcessed int     `json:"total_processed"`
+	Created        int     `json:"created"`
+	Updated        int     `json:"updated"`
+	Errors         []error `json:"errors,omitempty"`
+}
+
+// App handles teams business logic
+type App struct {
+	repo      TeamsRepository
+	apiClient SportsAPIClient
+}
+
+// NewApp creates a new teams App
+func NewApp(repo TeamsRepository, apiClient SportsAPIClient) *App {
+	return &App{
+		repo:      repo,
+		apiClient: apiClient,
+	}
+}
+
+// CreateTeam creates a new team with validation
+func (a *App) CreateTeam(ctx context.Context, req CreateTeamRequest) (*Team, error) {
+	if err := a.validateCreateTeamRequest(req); err != nil {
+		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Check if team with same external ID already exists
+	existingTeam, err := a.repo.GetTeamByExternalID(ctx, req.SportID, req.ExternalID)
+	if err == nil && existingTeam != nil {
+		return nil, fmt.Errorf("team with external ID %s already exists for sport %s", req.ExternalID, req.SportID)
+	}
+
+	team, err := a.repo.CreateTeam(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create team: %w", err)
+	}
+
+	log.Printf("Created team: %s (%s) in sport %s", team.Name, team.Code, team.SportID)
+	return team, nil
+}
+
+// GetTeam retrieves a team by ID
+func (a *App) GetTeam(ctx context.Context, id uuid.UUID) (*Team, error) {
+	team, err := a.repo.GetTeam(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team: %w", err)
+	}
+	return team, nil
+}
+
+// GetTeamByExternalID retrieves a team by sport ID and external ID
+func (a *App) GetTeamByExternalID(ctx context.Context, sportID, externalID string) (*Team, error) {
+	team, err := a.repo.GetTeamByExternalID(ctx, sportID, externalID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team by external ID: %w", err)
+	}
+	return team, nil
+}
+
+// ListTeamsBySport retrieves all teams for a specific sport
+func (a *App) ListTeamsBySport(ctx context.Context, sportID string) ([]Team, error) {
+	teams, err := a.repo.ListTeamsBySport(ctx, sportID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list teams by sport: %w", err)
+	}
+	return teams, nil
+}
+
+// ListAllTeams retrieves all teams
+func (a *App) ListAllTeams(ctx context.Context) ([]Team, error) {
+	teams, err := a.repo.ListAllTeams(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all teams: %w", err)
+	}
+	return teams, nil
+}
+
+// UpdateTeam updates an existing team with validation
+func (a *App) UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTeamRequest) (*Team, error) {
+	if err := a.validateUpdateTeamRequest(req); err != nil {
+		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Verify team exists
+	_, err := a.repo.GetTeam(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("team not found: %w", err)
+	}
+
+	team, err := a.repo.UpdateTeam(ctx, id, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update team: %w", err)
+	}
+
+	log.Printf("Updated team: %s (%s)", team.Name, team.Code)
+	return team, nil
+}
+
+// DeleteTeam deletes a team by ID
+func (a *App) DeleteTeam(ctx context.Context, id uuid.UUID) error {
+	// Verify team exists
+	team, err := a.repo.GetTeam(ctx, id)
+	if err != nil {
+		return fmt.Errorf("team not found: %w", err)
+	}
+
+	if err := a.repo.DeleteTeam(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete team: %w", err)
+	}
+
+	log.Printf("Deleted team: %s (%s)", team.Name, team.Code)
+	return nil
+}
+
+// SyncTeamsFromAPI synchronizes teams from external sports API
+func (a *App) SyncTeamsFromAPI(ctx context.Context, sportID string) (*SyncResult, error) {
+	result := &SyncResult{}
+
+	// Currently only supports NFL - extend for other sports
+	if sportID != "nfl" {
+		return nil, fmt.Errorf("sport %s not supported for API sync", sportID)
+	}
+
+	// Fetch teams from external API
+	apiTeams, err := a.apiClient.GetNFLTeams()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch teams from API: %w", err)
+	}
+
+	result.TotalProcessed = len(apiTeams)
+
+	for _, apiTeam := range apiTeams {
+		if err := a.syncSingleTeam(ctx, sportID, apiTeam); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("failed to sync team %s: %w", apiTeam.Name, err))
+			continue
+		}
+
+		// Check if this was a create or update operation
+		existingTeam, _ := a.repo.GetTeamByExternalID(ctx, sportID, "sportsapi")
+		if existingTeam != nil {
+			result.Updated++
+		} else {
+			result.Created++
+		}
+	}
+
+	log.Printf("Sync completed for %s: %d processed, %d created, %d updated, %d errors",
+		sportID, result.TotalProcessed, result.Created, result.Updated, len(result.Errors))
+
+	return result, nil
+}
+
+// GetTeamsWithFilter retrieves teams with filtering and pagination
+func (a *App) GetTeamsWithFilter(ctx context.Context, filter TeamFilter, pagination PaginationParams) (*TeamListResponse, error) {
+	// For now, implement basic filtering - extend with more sophisticated filtering later
+	var teams []Team
+	var err error
+
+	if filter.SportID != nil {
+		teams, err = a.repo.ListTeamsBySport(ctx, *filter.SportID)
+	} else {
+		teams, err = a.repo.ListAllTeams(ctx)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get teams: %w", err)
+	}
+
+	// Apply client-side filtering (should be moved to repository/database level for better performance)
+	filteredTeams := a.applyFilters(teams, filter)
+
+	// Apply pagination
+	paginatedTeams := a.applyPagination(filteredTeams, pagination)
+
+	return &TeamListResponse{
+		Teams:   paginatedTeams,
+		Total:   len(filteredTeams),
+		Limit:   pagination.Limit,
+		Offset:  pagination.Offset,
+		HasMore: pagination.Offset+len(paginatedTeams) < len(filteredTeams),
+	}, nil
+}
+
+// syncSingleTeam synchronizes a single team from API
+func (a *App) syncSingleTeam(ctx context.Context, sportID string, apiTeam sports_api_client.Team) error {
+	externalID := "sportsapi"
+
+	// Check if team already exists
+	existingTeam, err := a.repo.GetTeamByExternalID(ctx, sportID, externalID)
+	if err != nil {
+		// Team doesn't exist, create it
+		req := a.apiTeamToCreateRequest(sportID, apiTeam)
+		_, err := a.repo.CreateTeam(ctx, req)
+		return err
+	}
+
+	// Team exists, update it
+	updateReq := a.apiTeamToUpdateRequest(apiTeam)
+	_, err = a.repo.UpdateTeam(ctx, existingTeam.ID, updateReq)
+	return err
+}
+
+// apiTeamToCreateRequest converts API team to create request
+func (a *App) apiTeamToCreateRequest(sportID string, apiTeam sports_api_client.Team) CreateTeamRequest {
+	req := CreateTeamRequest{
+		SportID:    sportID,
+		ExternalID: "sportsapi",
+		Name:       apiTeam.Name,
+		Code:       apiTeam.Code,
+		City:       apiTeam.City,
+	}
+
+	if apiTeam.Coach != "" {
+		req.Coach = &apiTeam.Coach
+	}
+	if apiTeam.Owner != "" {
+		req.Owner = &apiTeam.Owner
+	}
+	if apiTeam.Stadium != "" {
+		req.Stadium = &apiTeam.Stadium
+	}
+	if apiTeam.Established != 0 {
+		req.EstablishedYear = &apiTeam.Established
+	}
+
+	return req
+}
+
+// apiTeamToUpdateRequest converts API team to update request
+func (a *App) apiTeamToUpdateRequest(apiTeam sports_api_client.Team) UpdateTeamRequest {
+	req := UpdateTeamRequest{
+		Name: &apiTeam.Name,
+		Code: &apiTeam.Code,
+		City: &apiTeam.City,
+	}
+
+	if apiTeam.Coach != "" {
+		req.Coach = &apiTeam.Coach
+	}
+	if apiTeam.Owner != "" {
+		req.Owner = &apiTeam.Owner
+	}
+	if apiTeam.Stadium != "" {
+		req.Stadium = &apiTeam.Stadium
+	}
+	if apiTeam.Established != 0 {
+		req.EstablishedYear = &apiTeam.Established
+	}
+
+	return req
+}
+
+// applyFilters applies client-side filters to teams
+func (a *App) applyFilters(teams []Team, filter TeamFilter) []Team {
+	if filter.City == nil && filter.Code == nil {
+		return teams
+	}
+
+	var filtered []Team
+	for _, team := range teams {
+		if filter.City != nil && team.City != *filter.City {
+			continue
+		}
+		if filter.Code != nil && team.Code != *filter.Code {
+			continue
+		}
+		filtered = append(filtered, team)
+	}
+
+	return filtered
+}
+
+// applyPagination applies pagination to teams slice
+func (a *App) applyPagination(teams []Team, pagination PaginationParams) []Team {
+	if pagination.Offset >= len(teams) {
+		return []Team{}
+	}
+
+	end := pagination.Offset + pagination.Limit
+	if end > len(teams) {
+		end = len(teams)
+	}
+
+	return teams[pagination.Offset:end]
+}
+
+// validateCreateTeamRequest validates create team request
+func (a *App) validateCreateTeamRequest(req CreateTeamRequest) error {
+	if req.SportID == "" {
+		return fmt.Errorf("sport_id is required")
+	}
+	if req.ExternalID == "" {
+		return fmt.Errorf("external_id is required")
+	}
+	if req.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if req.Code == "" {
+		return fmt.Errorf("code is required")
+	}
+	if req.City == "" {
+		return fmt.Errorf("city is required")
+	}
+	return nil
+}
+
+// validateUpdateTeamRequest validates update team request
+func (a *App) validateUpdateTeamRequest(req UpdateTeamRequest) error {
+	if req.Name != nil && *req.Name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+	if req.Code != nil && *req.Code == "" {
+		return fmt.Errorf("code cannot be empty")
+	}
+	if req.City != nil && *req.City == "" {
+		return fmt.Errorf("city cannot be empty")
+	}
+	return nil
+}
