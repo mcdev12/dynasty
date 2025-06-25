@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package team.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/team/v1;teamv1";
+
+// Team represents a sports team
+message Team {
+  string id = 1;
+  string sport_id = 2;
+  string external_id = 3;
+  string name = 4;
+  string code = 5;
+  string city = 6;
+  optional string coach = 7;
+  optional string owner = 8;
+  optional string stadium = 9;
+  optional int32 established_year = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+// CreateTeamRequest represents the data needed to create a new team
+message CreateTeamRequest {
+  string sport_id = 1;
+  string external_id = 2;
+  string name = 3;
+  string code = 4;
+  string city = 5;
+  optional string coach = 6;
+  optional string owner = 7;
+  optional string stadium = 8;
+  optional int32 established_year = 9;
+}
+
+// UpdateTeamRequest represents the data that can be updated for a team
+message UpdateTeamRequest {
+  string id = 1;
+  optional string name = 2;
+  optional string code = 3;
+  optional string city = 4;
+  optional string coach = 5;
+  optional string owner = 6;
+  optional string stadium = 7;
+  optional int32 established_year = 8;
+}
+
+// TeamFilter represents filtering options for team queries
+message TeamFilter {
+  optional string sport_id = 1;
+  optional string city = 2;
+  optional string code = 3;
+}
+
+// PaginationParams represents pagination parameters
+message PaginationParams {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+// TeamListResponse represents a paginated list of teams
+message TeamListResponse {
+  repeated Team teams = 1;
+  int32 total = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  bool has_more = 5;
+}
+
+// SyncResult represents the result of syncing teams from external API
+message SyncResult {
+  int32 total_processed = 1;
+  int32 created = 2;
+  int32 updated = 3;
+  repeated string errors = 4;
+}
+
+// TeamSortBy represents sorting options for team queries
+enum TeamSortBy {
+  TEAM_SORT_BY_UNSPECIFIED = 0;
+  TEAM_SORT_BY_NAME = 1;
+  TEAM_SORT_BY_CITY = 2;
+  TEAM_SORT_BY_ESTABLISHED_YEAR = 3;
+  TEAM_SORT_BY_CREATED_AT = 4;
+}

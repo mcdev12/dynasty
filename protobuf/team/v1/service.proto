@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package team.v1;
+
+import "team/v1/team.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/team/v1;teamv1";
+
+// TeamService provides team management operations
+service TeamService {
+  // CreateTeam creates a new team
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
+  
+  // GetTeam retrieves a team by ID
+  rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);
+  
+  // GetTeamByExternalID retrieves a team by sport ID and external ID
+  rpc GetTeamByExternalID(GetTeamByExternalIDRequest) returns (GetTeamByExternalIDResponse);
+  
+  // ListTeamsBySport retrieves all teams for a specific sport
+  rpc ListTeamsBySport(ListTeamsBySportRequest) returns (ListTeamsBySportResponse);
+  
+  // ListAllTeams retrieves all teams with optional filtering and pagination
+  rpc ListAllTeams(ListAllTeamsRequest) returns (ListAllTeamsResponse);
+  
+  // UpdateTeam updates an existing team
+  rpc UpdateTeam(UpdateTeamRequest) returns (UpdateTeamResponse);
+  
+  // DeleteTeam deletes a team by ID
+  rpc DeleteTeam(DeleteTeamRequest) returns (DeleteTeamResponse);
+  
+  // SyncTeamsFromAPI synchronizes teams from external sports API
+  rpc SyncTeamsFromAPI(SyncTeamsFromAPIRequest) returns (SyncTeamsFromAPIResponse);
+  
+  // GetTeamsWithFilter retrieves teams with filtering and pagination
+  rpc GetTeamsWithFilter(GetTeamsWithFilterRequest) returns (GetTeamsWithFilterResponse);
+}
+
+// Request/Response messages for CreateTeam
+message CreateTeamResponse {
+  Team team = 1;
+}
+
+// Request/Response messages for GetTeam
+message GetTeamRequest {
+  string id = 1;
+}
+
+message GetTeamResponse {
+  Team team = 1;
+}
+
+// Request/Response messages for GetTeamByExternalID
+message GetTeamByExternalIDRequest {
+  string sport_id = 1;
+  string external_id = 2;
+}
+
+message GetTeamByExternalIDResponse {
+  Team team = 1;
+}
+
+// Request/Response messages for ListTeamsBySport
+message ListTeamsBySportRequest {
+  string sport_id = 1;
+}
+
+message ListTeamsBySportResponse {
+  repeated Team teams = 1;
+}
+
+// Request/Response messages for ListAllTeams
+message ListAllTeamsRequest {
+  optional PaginationParams pagination = 1;
+  optional TeamSortBy sort_by = 2;
+}
+
+message ListAllTeamsResponse {
+  repeated Team teams = 1;
+  int32 total = 2;
+  bool has_more = 3;
+}
+
+// Request/Response messages for UpdateTeam
+message UpdateTeamResponse {
+  Team team = 1;
+}
+
+// Request/Response messages for DeleteTeam
+message DeleteTeamRequest {
+  string id = 1;
+}
+
+message DeleteTeamResponse {
+  bool success = 1;
+}
+
+// Request/Response messages for SyncTeamsFromAPI
+message SyncTeamsFromAPIRequest {
+  string sport_id = 1;
+}
+
+message SyncTeamsFromAPIResponse {
+  SyncResult result = 1;
+}
+
+// Request/Response messages for GetTeamsWithFilter
+message GetTeamsWithFilterRequest {
+  optional TeamFilter filter = 1;
+  optional PaginationParams pagination = 2;
+  optional TeamSortBy sort_by = 3;
+}
+
+message GetTeamsWithFilterResponse {
+  TeamListResponse response = 1;
+}

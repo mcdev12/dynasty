@@ -14,7 +14,7 @@ import (
 
 type Config struct {
 	Sports struct {
-		EnabledPlugins []string `yaml:"enabled_plugins"`
+		EnabledPlugins []string                          `yaml:"enabled_plugins"`
 		Plugins        map[string]map[string]interface{} `yaml:"plugins"`
 	} `yaml:"sports"`
 }
