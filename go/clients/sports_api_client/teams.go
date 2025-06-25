@@ -32,9 +32,8 @@ type TeamsResponse struct {
 	Response   []Team                 `json:"response"`
 }
 
-
 func (c *SportsApiClient) GetNFLTeams() ([]Team, error) {
-	return c.GetTeamsByLeagueAndSeason(NFLLeagueID, Season2024)
+	return c.GetTeamsByLeagueAndSeason(NFLLeagueID, Season2023)
 }
 
 func (c *SportsApiClient) GetTeamsByLeagueAndSeason(leagueID, season string) ([]Team, error) {

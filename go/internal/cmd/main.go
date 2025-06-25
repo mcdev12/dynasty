@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/mcdev12/dynasty/go/clients/sports_api_client"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/mcdev12/dynasty/go/clients/sports_api_client"
 )
 
 func main() {
@@ -28,7 +28,5 @@ func main() {
 	}
 
 	fmt.Printf("Found %d NFL teams:\n", len(teams))
-	for _, team := range teams {
-		fmt.Printf("- %s (%s) - %s\n", team.Name, team.Code, team.City)
-	}
+	fmt.Println(teams)
 }
