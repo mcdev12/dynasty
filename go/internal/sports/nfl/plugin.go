@@ -22,8 +22,8 @@ type NFLPlugin struct {
 // Config holds NFL-specific configuration.
 type Config struct {
 	SportsAPI struct {
-		APIKey     string `yaml:"api_key"`
-		BaseURL    string `yaml:"base_url"`
+		APIKey  string `yaml:"api_key"`
+		BaseURL string `yaml:"base_url"`
 	} `yaml:"sports_api"`
 	SportRadar struct {
 		APIKey  string `yaml:"api_key"`
@@ -166,7 +166,7 @@ func (p *NFLPlugin) MapExternalPlayer(srPlayer sportradarclient.SRPlayer) (*mode
 		ExternalID:       fmt.Sprintf("sr_%s", srPlayer.ID),
 		FullName:         srPlayer.Name,
 		NFLPlayerProfile: profile,
-		// TODO TeamID will be nil for now - we'd need to map the team
+		// TODO Team id is mapped in App. Think about how to handle free agents. Should team be optional?
 	}
 
 	return player, nil

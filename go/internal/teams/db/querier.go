@@ -15,6 +15,7 @@ type Querier interface {
 	DeleteTeam(ctx context.Context, id uuid.UUID) error
 	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
 	GetTeamByExternalID(ctx context.Context, arg GetTeamByExternalIDParams) (Team, error)
+	GetTeamBySportIdAndAlias(ctx context.Context, arg GetTeamBySportIdAndAliasParams) (Team, error)
 	ListAllTeams(ctx context.Context) ([]Team, error)
 	ListTeamsBySport(ctx context.Context, sportID string) ([]Team, error)
 	UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error)

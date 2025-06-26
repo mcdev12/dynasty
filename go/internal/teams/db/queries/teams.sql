@@ -29,6 +29,9 @@ SELECT * FROM teams WHERE id = $1;
 -- name: GetTeamByExternalID :one
 SELECT * FROM teams WHERE sport_id = $1 AND external_id = $2;
 
+-- name: GetTeamBySportIdAndAlias :one
+SELECT * FROM teams WHERE sport_id = $1 AND code = $2;
+
 -- name: ListTeamsBySport :many
 SELECT * FROM teams WHERE sport_id = $1 ORDER BY name;
 

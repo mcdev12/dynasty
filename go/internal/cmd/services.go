@@ -28,7 +28,7 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	// Players
 	playerQueries := playerdb.New(database)
 	playerRepo := player.NewRepository(playerQueries, database)
-	playerApp := player.NewApp(playerRepo, plugins)
+	playerApp := player.NewApp(playerRepo, plugins, teamsApp)
 	playerService := player.NewService(playerApp)
 
 	return &Services{

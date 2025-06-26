@@ -139,6 +139,34 @@ func (q *Queries) GetTeamByExternalID(ctx context.Context, arg GetTeamByExternal
 	return i, err
 }
 
+const getTeamBySportIdAndAlias = `-- name: GetTeamBySportIdAndAlias :one
+SELECT id, sport_id, external_id, name, code, city, coach, owner, stadium, established_year, created_at FROM teams WHERE sport_id = $1 AND code = $2
+`
+
+type GetTeamBySportIdAndAliasParams struct {
+	SportID string `json:"sport_id"`
+	Code    string `json:"code"`
+}
+
+func (q *Queries) GetTeamBySportIdAndAlias(ctx context.Context, arg GetTeamBySportIdAndAliasParams) (Team, error) {
+	row := q.db.QueryRowContext(ctx, getTeamBySportIdAndAlias, arg.SportID, arg.Code)
+	var i Team
+	err := row.Scan(
+		&i.ID,
+		&i.SportID,
+		&i.ExternalID,
+		&i.Name,
+		&i.Code,
+		&i.City,
+		&i.Coach,
+		&i.Owner,
+		&i.Stadium,
+		&i.EstablishedYear,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listAllTeams = `-- name: ListAllTeams :many
 SELECT id, sport_id, external_id, name, code, city, coach, owner, stadium, established_year, created_at FROM teams ORDER BY sport_id, name
 `

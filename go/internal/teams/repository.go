@@ -15,6 +15,7 @@ type Querier interface {
 	CreateTeam(ctx context.Context, arg db.CreateTeamParams) (db.Team, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (db.Team, error)
 	GetTeamByExternalID(ctx context.Context, arg db.GetTeamByExternalIDParams) (db.Team, error)
+	GetTeamBySportIdAndAlias(ctx context.Context, arg db.GetTeamBySportIdAndAliasParams) (db.Team, error)
 	ListTeamsBySport(ctx context.Context, sportID string) ([]db.Team, error)
 	ListAllTeams(ctx context.Context) ([]db.Team, error)
 	UpdateTeam(ctx context.Context, arg db.UpdateTeamParams) (db.Team, error)
@@ -65,6 +66,20 @@ func (r *Repository) GetTeamByExternalID(ctx context.Context, sportID, externalI
 	dbTeam, err := r.queries.GetTeamByExternalID(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get team by external ID: %w", err)
+	}
+
+	return r.dbTeamToModel(dbTeam), nil
+}
+
+func (r *Repository) GetTeamBySportIdAndCode(ctx context.Context, sportID, code string) (*models.Team, error) {
+	params := db.GetTeamBySportIdAndAliasParams{
+		SportID: sportID,
+		Code:    code,
+	}
+
+	dbTeam, err := r.queries.GetTeamBySportIdAndAlias(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team by sport ID and code: %w", err)
 	}
 
 	return r.dbTeamToModel(dbTeam), nil

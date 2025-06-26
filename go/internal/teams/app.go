@@ -16,6 +16,7 @@ type TeamsRepository interface {
 	CreateTeam(ctx context.Context, req CreateTeamRequest) (*models.Team, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (*models.Team, error)
 	GetTeamByExternalID(ctx context.Context, sportID, externalID string) (*models.Team, error)
+	GetTeamBySportIdAndCode(ctx context.Context, sportID, code string) (*models.Team, error)
 	ListTeamsBySport(ctx context.Context, sportID string) ([]models.Team, error)
 	ListAllTeams(ctx context.Context) ([]models.Team, error)
 	UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTeamRequest) (*models.Team, error)
@@ -79,6 +80,14 @@ func (a *App) GetTeamByExternalID(ctx context.Context, sportID, externalID strin
 	team, err := a.repo.GetTeamByExternalID(ctx, sportID, externalID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get team by external ID: %w", err)
+	}
+	return team, nil
+}
+
+func (a *App) GetTeamBySportIdAndCode(ctx context.Context, sportID, code string) (*models.Team, error) {
+	team, err := a.repo.GetTeamBySportIdAndCode(ctx, sportID, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team by sport ID and code: %w", err)
 	}
 	return team, nil
 }

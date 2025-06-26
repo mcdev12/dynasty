@@ -16,6 +16,9 @@ service TeamService {
   
   // GetTeamByExternalID retrieves a team by sport ID and external ID
   rpc GetTeamByExternalID(GetTeamByExternalIDRequest) returns (GetTeamByExternalIDResponse);
+
+  // GetTeamBySportIDAndCode retrieves a team by sport ID and sport code
+  rpc GetTeamBySportIDAndCode(GetTeamBySportIDAndCodeRequest) returns (GetTeamBySportIDAndCodeResponse);
   
   // ListTeamsBySport retrieves all teams for a specific sport
   rpc ListTeamsBySport(ListTeamsBySportRequest) returns (ListTeamsBySportResponse);
@@ -47,6 +50,15 @@ message GetTeamRequest {
 }
 
 message GetTeamResponse {
+  Team team = 1;
+}
+
+message GetTeamBySportIDAndCodeRequest {
+  string sport_id = 1;
+  string team_code = 2;
+}
+
+message GetTeamBySportIDAndCodeResponse {
   Team team = 1;
 }
 

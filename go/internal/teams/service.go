@@ -16,6 +16,7 @@ type TeamsApp interface {
 	CreateTeam(ctx context.Context, req CreateTeamRequest) (*models.Team, error)
 	GetTeam(ctx context.Context, id uuid.UUID) (*models.Team, error)
 	GetTeamByExternalID(ctx context.Context, sportID, externalID string) (*models.Team, error)
+	GetTeamBySportIdAndCode(ctx context.Context, sportID, code string) (*models.Team, error)
 	ListTeamsBySport(ctx context.Context, sportID string) ([]models.Team, error)
 	ListAllTeams(ctx context.Context) ([]models.Team, error)
 	UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTeamRequest) (*models.Team, error)
@@ -84,6 +85,19 @@ func (s *Service) GetTeamByExternalID(ctx context.Context, req *connect.Request[
 	protoTeam := s.teamToProto(team)
 
 	return connect.NewResponse(&teamv1.GetTeamByExternalIDResponse{
+		Team: protoTeam,
+	}), nil
+}
+
+func (s *Service) GetTeamBySportIDAndCode(ctx context.Context, req *connect.Request[teamv1.GetTeamBySportIDAndCodeRequest]) (*connect.Response[teamv1.GetTeamBySportIDAndCodeResponse], error) {
+	team, err := s.app.GetTeamBySportIdAndCode(ctx, req.Msg.SportId, req.Msg.TeamCode)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	protoTeam := s.teamToProto(team)
+
+	return connect.NewResponse(&teamv1.GetTeamBySportIDAndCodeResponse{
 		Team: protoTeam,
 	}), nil
 }

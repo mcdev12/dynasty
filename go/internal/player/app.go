@@ -19,6 +19,10 @@ type PlayerRepository interface {
 	DeletePlayer(ctx context.Context, id uuid.UUID) error
 }
 
+type TeamApp interface {
+	GetTeamBySportIdAndCode(ctx context.Context, sportID, code string) (*models.Team, error)
+}
+
 // SyncResult represents the result of syncing players from external API
 type SyncResult struct {
 	TotalProcessed int     `json:"total_processed"`
@@ -30,13 +34,15 @@ type SyncResult struct {
 // App handles player business logic
 type App struct {
 	repo    PlayerRepository
+	teamApp TeamApp
 	plugins map[string]base.SportPlugin
 }
 
 // NewApp creates a new player App
-func NewApp(repo PlayerRepository, plugins map[string]base.SportPlugin) *App {
+func NewApp(repo PlayerRepository, plugins map[string]base.SportPlugin, teamApp TeamApp) *App {
 	return &App{
 		repo:    repo,
+		teamApp: teamApp,
 		plugins: plugins,
 	}
 }
@@ -112,6 +118,12 @@ func (a *App) validateCreatePlayerRequest(req CreatePlayerRequest) error {
 func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId string) (*SyncResult, error) {
 	result := &SyncResult{}
 
+	// Fetch team for team id
+	team, err := a.teamApp.GetTeamBySportIdAndCode(ctx, sportId, teamAlias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team: %w", err)
+	}
+
 	// Get the NFL plugin (assuming NFL for now)
 	plugin, exists := a.plugins[sportId]
 	if !exists {
@@ -127,7 +139,7 @@ func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId 
 	result.TotalProcessed = len(players)
 
 	for _, player := range players {
-		isNew, err := a.upsertPlayerFromPlugin(ctx, plugin, player)
+		isNew, err := a.upsertPlayerFromPlugin(ctx, plugin, player, team.ID)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("failed to upsert player %s: %w", player.Name, err))
 			continue
@@ -151,12 +163,14 @@ func (a *App) SyncAllNFLPlayersFromAPI(ctx context.Context) (*SyncResult, error)
 
 // upsertPlayerFromPlugin performs an upsert operation for a player from plugin data
 // Returns true if player was created (new), false if updated
-func (a *App) upsertPlayerFromPlugin(ctx context.Context, plugin base.SportPlugin, srPlayer sportradarclient.SRPlayer) (bool, error) {
+func (a *App) upsertPlayerFromPlugin(ctx context.Context, plugin base.SportPlugin, srPlayer sportradarclient.SRPlayer, teamId uuid.UUID) (bool, error) {
 	// Map player data using the plugin (includes attached profile)
 	player, err := plugin.MapExternalPlayer(srPlayer)
 	if err != nil {
 		return false, fmt.Errorf("failed to map external player: %w", err)
 	}
+
+	player.TeamID = &teamId
 
 	// Check if player already exists
 	existingPlayer, err := a.repo.GetPlayerByExternalID(ctx, player.SportID, player.ExternalID)
