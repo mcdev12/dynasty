@@ -3,9 +3,10 @@ package nfl
 import (
 	"context"
 	"fmt"
-	sportradarclient "github.com/mcdev12/dynasty/go/clients/sport_radar_client"
 	"os"
+	"strconv"
 
+	sportradarclient "github.com/mcdev12/dynasty/go/clients/sport_radar_client"
 	sportsapiclient "github.com/mcdev12/dynasty/go/clients/sports_api_client"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"github.com/mcdev12/dynasty/go/internal/sports/base"
@@ -20,9 +21,15 @@ type NFLPlugin struct {
 
 // Config holds NFL-specific configuration.
 type Config struct {
-	APIBaseURL string `yaml:"api_base_url"`
-	APIKey     string `yaml:"api_key"`
-	PageSize   int    `yaml:"page_size"` // number of players per fetch
+	SportsAPI struct {
+		APIKey     string `yaml:"api_key"`
+		BaseURL    string `yaml:"base_url"`
+	} `yaml:"sports_api"`
+	SportRadar struct {
+		APIKey  string `yaml:"api_key"`
+		BaseURL string `yaml:"base_url"`
+	} `yaml:"sport_radar"`
+	PageSize int `yaml:"page_size"` // number of players per fetch
 }
 
 // init registers the NFL plugin with the base registry (without initialization).
@@ -33,18 +40,42 @@ func init() {
 	}
 }
 
-// Init initializes the plugin, loading config and creating the API client.
+// Init initializes the plugin, loading config and creating the API clients.
 func (p *NFLPlugin) Init() error {
-	// Get API key from environment
+	// Get API keys from environment
 	sportsApiKey := os.Getenv("SPORTS_API_KEY")
 	if sportsApiKey == "" {
 		return fmt.Errorf("SPORTS_API_KEY environment variable is required for NFL plugin")
 	}
 
-	p.config = Config{
-		APIKey: sportsApiKey,
+	sportRadarApiKey := os.Getenv("SPORT_RADAR_API_KEY")
+	if sportRadarApiKey == "" {
+		return fmt.Errorf("SPORT_RADAR_API_KEY environment variable is required for NFL plugin")
 	}
-	p.sportsApi = sportsapiclient.NewSportsApiClient(p.config.APIKey)
+
+	// Initialize config with API keys
+	p.config = Config{
+		SportsAPI: struct {
+			APIKey  string `yaml:"api_key"`
+			BaseURL string `yaml:"base_url"`
+		}{
+			APIKey:  sportsApiKey,
+			BaseURL: "https://api.sportsdata.io", // default base URL
+		},
+		SportRadar: struct {
+			APIKey  string `yaml:"api_key"`
+			BaseURL string `yaml:"base_url"`
+		}{
+			APIKey:  sportRadarApiKey,
+			BaseURL: "https://api.sportradar.us", // default base URL
+		},
+		PageSize: 100, // default page size
+	}
+
+	// Initialize API clients with their respective keys
+	p.sportsApi = sportsapiclient.NewSportsApiClient(p.config.SportsAPI.APIKey)
+	p.sportRadar = sportradarclient.NewSportRadarClient(p.config.SportRadar.APIKey)
+
 	return nil
 }
 
@@ -86,47 +117,68 @@ func (p *NFLPlugin) MapExternalTeam(apiTeam sportsapiclient.Team, sportID string
 	return team, nil
 }
 
-// FetchPlayers retrieves NFL players updated since the given time.
-//func (p *NFLPlugin) FetchPlayers(ctx context.Context, since time.Time) ([]json.RawMessage, error) {
-//	// sportsapi.FetchPlayers returns raw JSON objects for players
-//	payloads, err := p.api.FetchPlayers(ctx, "nfl", since)
-//	if err != nil {
-//		return nil, fmt.Errorf("nfl: FetchPlayers error: %w", err)
-//	}
-//	// Convert payload structs to RawMessage
-//	raws := make([]json.RawMessage, len(payloads))
-//	for i, payload := range payloads {
-//		raw, err := json.Marshal(payload)
-//		if err != nil {
-//			return nil, fmt.Errorf("nfl: marshal player payload: %w", err)
-//		}
-//		raws[i] = raw
-//	}
-//	return raws, nil
-//}
+// FetchPlayers retrieves NFL players for a specific team by alias.
+func (p *NFLPlugin) FetchPlayers(ctx context.Context, teamAlias string) ([]sportradarclient.SRPlayer, error) {
+	// Fetch roster from SportRadar using team alias
+	roster, err := p.sportRadar.GetTeamRosterByAlias(teamAlias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch roster from SportRadar: %w", err)
+	}
 
-// MapExternalPlayer maps a raw JSON payload to a core Player model.
-//func (p *NFLPlugin) MapExternalPlayer(raw json.RawMessage) (*models.Player, error) {
-//	var tmp struct {
-//		ID         string   `json:"id"`
-//		ExternalID string   `json:"external_id"`
-//		Name       string   `json:"name"`
-//		Positions  []string `json:"positions"`
-//		TeamID     string   `json:"team_id"`
-//	}
-//	if err := json.Unmarshal(raw, &tmp); err != nil {
-//		return nil, fmt.Errorf("nfl: MapExternalPlayer unmarshal error: %w", err)
-//	}
-//	player := &models.Player{
-//		ID:         tmp.ID,
-//		SportID:    "nfl",
-//		ExternalID: tmp.ExternalID,
-//		FullName:   tmp.Name,
-//		Positions:  tmp.Positions,
-//		TeamID:     tmp.TeamID,
-//	}
-//	return player, nil
-//}
+	return roster.Players, nil
+}
+
+// MapExternalPlayer maps a SportRadar player to core Player model with attached NFL profile.
+func (p *NFLPlugin) MapExternalPlayer(srPlayer sportradarclient.SRPlayer) (*models.Player, error) {
+	// Create NFL profile with all available fields
+	profile := &models.NFLPlayerProfile{
+		Position:     srPlayer.Position,
+		College:      stringPtr(srPlayer.College),
+		Experience:   srPlayer.Experience,
+		HeightDesc:   fmt.Sprintf("%d\"", srPlayer.Height), // Convert inches to description
+		WeightDesc:   fmt.Sprintf("%.0f lbs", srPlayer.Weight),
+		GroupRole:    "", // TODO: Map from position to group role (Offense/Defense/Special Teams)
+		JerseyNumber: 0,  // Will be set below if available
+	}
+
+	// Convert height from inches to cm
+	if srPlayer.Height > 0 {
+		heightCm := int(float64(srPlayer.Height) * 2.54)
+		profile.HeightCm = &heightCm
+	}
+
+	// Convert weight from pounds to kg
+	if srPlayer.Weight > 0 {
+		weightKg := int(srPlayer.Weight * 0.453592)
+		profile.WeightKg = &weightKg
+	}
+
+	// Parse jersey number
+	if srPlayer.Jersey != "" {
+		if jerseyNum, err := strconv.Atoi(srPlayer.Jersey); err == nil {
+			profile.JerseyNumber = jerseyNum
+		}
+	}
+
+	// Create base player model with attached profile
+	player := &models.Player{
+		SportID:          "nfl",
+		ExternalID:       fmt.Sprintf("sr_%s", srPlayer.ID),
+		FullName:         srPlayer.Name,
+		NFLPlayerProfile: profile,
+		// TODO TeamID will be nil for now - we'd need to map the team
+	}
+
+	return player, nil
+}
+
+// Helper functions
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
 
 // The rest of SportPlugin methods can have stub implementations or be left unimplemented.
 

@@ -74,6 +74,7 @@ message DeletePlayerResponse {
 // Request/Response messages for SyncPlayersFromAPI
 message SyncPlayersFromAPIRequest {
   string team_alias = 1; // e.g., "SF", "KC"
+  string sport_id = 2; // e.g "NFL"
 }
 
 message SyncPlayersFromAPIResponse {

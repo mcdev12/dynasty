@@ -17,7 +17,7 @@ type PlayerApp interface {
 	GetPlayer(ctx context.Context, id uuid.UUID) (*models.Player, error)
 	GetPlayerByExternalID(ctx context.Context, sportID, externalID string) (*models.Player, error)
 	DeletePlayer(ctx context.Context, id uuid.UUID) error
-	SyncPlayersFromAPI(ctx context.Context, teamAlias string) (*SyncResult, error)
+	SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId string) (*SyncResult, error)
 	SyncAllNFLPlayersFromAPI(ctx context.Context) (*SyncResult, error)
 }
 
@@ -110,7 +110,7 @@ func (s *Service) DeletePlayer(ctx context.Context, req *connect.Request[playerv
 
 // SyncPlayersFromAPI synchronizes players from external sports API for a specific team
 func (s *Service) SyncPlayersFromAPI(ctx context.Context, req *connect.Request[playerv1.SyncPlayersFromAPIRequest]) (*connect.Response[playerv1.SyncPlayersFromAPIResponse], error) {
-	result, err := s.app.SyncPlayersFromAPI(ctx, req.Msg.TeamAlias)
+	result, err := s.app.SyncPlayersFromAPI(ctx, req.Msg.TeamAlias, req.Msg.SportId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

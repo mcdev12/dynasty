@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"connectrpc.com/grpcreflect"
+	"github.com/mcdev12/dynasty/go/internal/genproto/player/v1/playerv1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/team/v1/teamv1connect"
 	"github.com/rs/cors"
 	"golang.org/x/net/http2"
@@ -52,11 +53,16 @@ func registerServices(mux *http.ServeMux, services *Services) {
 	// Register team service
 	teamServicePath, teamServiceHandler := teamv1connect.NewTeamServiceHandler(services.Teams)
 	mux.Handle(teamServicePath, teamServiceHandler)
+
+	// Register player service
+	playerServicePath, playerServiceHandler := playerv1connect.NewPlayerServiceHandler(services.Players)
+	mux.Handle(playerServicePath, playerServiceHandler)
 }
 
 func setupReflection(mux *http.ServeMux) {
 	reflector := grpcreflect.NewStaticReflector(
 		teamv1connect.TeamServiceName,
+		playerv1connect.PlayerServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))

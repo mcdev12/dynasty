@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	sportradarclient "github.com/mcdev12/dynasty/go/clients/sport_radar_client"
 	sportsapi "github.com/mcdev12/dynasty/go/clients/sports_api_client"
 	"github.com/mcdev12/dynasty/go/internal/models"
 )
@@ -12,17 +13,21 @@ import (
 // SportPlugin defines the interface each sport plugin must implement.
 type SportPlugin interface {
 	Init() error
+
+	// Team operations
 	FetchTeams(ctx context.Context) ([]sportsapi.Team, error)
 	MapExternalTeam(apiTeam sportsapi.Team, sportID string) (*models.Team, error)
+
+	// Player operations
+	FetchPlayers(ctx context.Context, teamAlias string) ([]sportradarclient.SRPlayer, error)
+	MapExternalPlayer(srPlayer sportradarclient.SRPlayer) (*models.Player, error)
 
 	//DefaultScoringTemplates() map[string][]ScoringRule
 	//ValidateRoster(r *Roster) error
 	//
-	//MapExternalPlayer(raw json.RawMessage) (*Player, error)
 	//MapExternalStats(raw json.RawMessage) (*Stats, error)
 	//MapExternalStatus(raw json.RawMessage) (*Status, error)
 	//
-	//FetchPlayers(ctx context.Context, since time.Time) ([]json.RawMessage, error)
 	//FetchStats(ctx context.Context, gameID string) ([]json.RawMessage, error)
 	//FetchStatus(ctx context.Context, since time.Time) ([]json.RawMessage, error)
 	//

@@ -3,11 +3,11 @@ package player
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/google/uuid"
 	sportradarclient "github.com/mcdev12/dynasty/go/clients/sport_radar_client"
 	"github.com/mcdev12/dynasty/go/internal/models"
+	"github.com/mcdev12/dynasty/go/internal/sports/base"
 )
 
 // PlayerRepository defines what the app layer needs from the repository
@@ -29,15 +29,15 @@ type SyncResult struct {
 
 // App handles player business logic
 type App struct {
-	repo         PlayerRepository
-	sportRadar   *sportradarclient.SportRadarClient
+	repo    PlayerRepository
+	plugins map[string]base.SportPlugin
 }
 
 // NewApp creates a new player App
-func NewApp(repo PlayerRepository, sportRadar *sportradarclient.SportRadarClient) *App {
+func NewApp(repo PlayerRepository, plugins map[string]base.SportPlugin) *App {
 	return &App{
-		repo:       repo,
-		sportRadar: sportRadar,
+		repo:    repo,
+		plugins: plugins,
 	}
 }
 
@@ -108,22 +108,28 @@ func (a *App) validateCreatePlayerRequest(req CreatePlayerRequest) error {
 	return nil
 }
 
-// SyncPlayersFromAPI synchronizes players from SportRadar API for a specific team
-func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string) (*SyncResult, error) {
+// SyncPlayersFromAPI synchronizes players from external API for a specific team
+func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId string) (*SyncResult, error) {
 	result := &SyncResult{}
 
-	// Fetch roster from SportRadar
-	roster, err := a.sportRadar.GetTeamRosterByAlias(teamAlias)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch roster from SportRadar: %w", err)
+	// Get the NFL plugin (assuming NFL for now)
+	plugin, exists := a.plugins[sportId]
+	if !exists {
+		return nil, fmt.Errorf("no plugin found for sport: nfl")
 	}
 
-	result.TotalProcessed = len(roster.Players)
+	// Fetch players from the plugin for a specific team
+	players, err := plugin.FetchPlayers(ctx, teamAlias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch players from plugin: %w", err)
+	}
 
-	for _, srPlayer := range roster.Players {
-		isNew, err := a.upsertPlayer(ctx, srPlayer)
+	result.TotalProcessed = len(players)
+
+	for _, player := range players {
+		isNew, err := a.upsertPlayerFromPlugin(ctx, plugin, player)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("failed to upsert player %s: %w", srPlayer.Name, err))
+			result.Errors = append(result.Errors, fmt.Errorf("failed to upsert player %s: %w", player.Name, err))
 			continue
 		}
 
@@ -137,41 +143,19 @@ func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string) (*SyncRe
 	return result, nil
 }
 
-// SyncAllNFLPlayersFromAPI synchronizes all NFL players from SportRadar API
+// SyncAllNFLPlayersFromAPI synchronizes all NFL players from external API
+// This method should be called with specific team aliases instead
 func (a *App) SyncAllNFLPlayersFromAPI(ctx context.Context) (*SyncResult, error) {
-	result := &SyncResult{}
-
-	// First, get all NFL teams
-	teams, err := a.sportRadar.GetNFLTeams()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch NFL teams: %w", err)
-	}
-
-	// Sync players for each team
-	for _, team := range teams {
-		teamResult, err := a.SyncPlayersFromAPI(ctx, team.Alias)
-		if err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("failed to sync players for team %s: %w", team.Alias, err))
-			continue
-		}
-
-		// Aggregate results
-		result.TotalProcessed += teamResult.TotalProcessed
-		result.Created += teamResult.Created
-		result.Updated += teamResult.Updated
-		result.Errors = append(result.Errors, teamResult.Errors...)
-	}
-
-	return result, nil
+	return nil, fmt.Errorf("use SyncPlayersFromAPI(ctx, teamAlias) for specific teams instead")
 }
 
-// upsertPlayer performs an upsert operation for a player (create if not exists, update if exists)
+// upsertPlayerFromPlugin performs an upsert operation for a player from plugin data
 // Returns true if player was created (new), false if updated
-func (a *App) upsertPlayer(ctx context.Context, srPlayer sportradarclient.SRPlayer) (bool, error) {
-	// Map SportRadar player to our domain model
-	player, profile, err := a.mapSportRadarPlayer(srPlayer)
+func (a *App) upsertPlayerFromPlugin(ctx context.Context, plugin base.SportPlugin, srPlayer sportradarclient.SRPlayer) (bool, error) {
+	// Map player data using the plugin (includes attached profile)
+	player, err := plugin.MapExternalPlayer(srPlayer)
 	if err != nil {
-		return false, fmt.Errorf("failed to map SportRadar player: %w", err)
+		return false, fmt.Errorf("failed to map external player: %w", err)
 	}
 
 	// Check if player already exists
@@ -183,7 +167,7 @@ func (a *App) upsertPlayer(ctx context.Context, srPlayer sportradarclient.SRPlay
 			ExternalID: player.ExternalID,
 			FullName:   player.FullName,
 			TeamID:     player.TeamID,
-			Profile:    profile,
+			Profile:    player.NFLPlayerProfile,
 		}
 		_, err := a.repo.CreatePlayer(ctx, createReq)
 		if err != nil {
@@ -192,62 +176,11 @@ func (a *App) upsertPlayer(ctx context.Context, srPlayer sportradarclient.SRPlay
 		return true, nil // Created new player
 	}
 
-	// Player exists, update both player and profile
-	_, err = a.repo.UpdatePlayerAndProfile(ctx, existingPlayer.ID, player.FullName, player.TeamID, profile)
+	// Player exists, update it
+	_, err = a.repo.UpdatePlayerAndProfile(ctx, existingPlayer.ID, player.FullName, player.TeamID, player.NFLPlayerProfile)
 	if err != nil {
 		return false, fmt.Errorf("failed to update player: %w", err)
 	}
 
 	return false, nil // Updated existing player
-}
-
-// mapSportRadarPlayer converts SportRadar player to our domain models
-func (a *App) mapSportRadarPlayer(srPlayer sportradarclient.SRPlayer) (*models.Player, models.Profile, error) {
-	// Create base player model
-	player := &models.Player{
-		SportID:    "nfl",
-		ExternalID: fmt.Sprintf("sr_%s", srPlayer.ID),
-		FullName:   srPlayer.Name,
-		// TeamID will be nil for now - we'd need to map the team
-	}
-
-	// Create NFL profile
-	profile := &models.NFLPlayerProfile{
-		Position:   srPlayer.Position,
-		College:    stringPtr(srPlayer.College),
-		Experience: srPlayer.Experience,
-	}
-
-	// Convert height from inches to cm
-	if srPlayer.Height > 0 {
-		heightCm := int(float64(srPlayer.Height) * 2.54)
-		profile.HeightCm = &heightCm
-	}
-
-	// Convert weight from pounds to kg
-	if srPlayer.Weight > 0 {
-		weightKg := int(srPlayer.Weight * 0.453592)
-		profile.WeightKg = &weightKg
-	}
-
-	// Parse jersey number
-	if srPlayer.Jersey != "" {
-		if jerseyNum, err := strconv.Atoi(srPlayer.Jersey); err == nil {
-			profile.JerseyNumber = jerseyNum
-		}
-	}
-
-	return player, profile, nil
-}
-
-// Helper functions
-func stringPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-func intPtr(i int) *int {
-	return &i
 }
