@@ -153,3 +153,68 @@ func (q *Queries) GetNFLPlayerProfileByExternalID(ctx context.Context, arg GetNF
 	)
 	return i, err
 }
+
+const updateNFLPlayerProfile = `-- name: UpdateNFLPlayerProfile :one
+UPDATE nfl_player_profiles SET
+    height_cm = $2,
+    weight_kg = $3,
+    group_role = $4,
+    position = $5,
+    age = $6,
+    height_desc = $7,
+    weight_desc = $8,
+    college = $9,
+    jersey_number = $10,
+    salary_desc = $11,
+    experience = $12
+WHERE player_id = $1
+RETURNING player_id, height_cm, weight_kg, group_role, position, age, height_desc, weight_desc, college, jersey_number, salary_desc, experience
+`
+
+type UpdateNFLPlayerProfileParams struct {
+	PlayerID     uuid.UUID      `json:"player_id"`
+	HeightCm     sql.NullInt32  `json:"height_cm"`
+	WeightKg     sql.NullInt32  `json:"weight_kg"`
+	GroupRole    sql.NullString `json:"group_role"`
+	Position     sql.NullString `json:"position"`
+	Age          sql.NullInt32  `json:"age"`
+	HeightDesc   sql.NullString `json:"height_desc"`
+	WeightDesc   sql.NullString `json:"weight_desc"`
+	College      sql.NullString `json:"college"`
+	JerseyNumber sql.NullInt16  `json:"jersey_number"`
+	SalaryDesc   sql.NullString `json:"salary_desc"`
+	Experience   sql.NullInt16  `json:"experience"`
+}
+
+func (q *Queries) UpdateNFLPlayerProfile(ctx context.Context, arg UpdateNFLPlayerProfileParams) (NflPlayerProfile, error) {
+	row := q.db.QueryRowContext(ctx, updateNFLPlayerProfile,
+		arg.PlayerID,
+		arg.HeightCm,
+		arg.WeightKg,
+		arg.GroupRole,
+		arg.Position,
+		arg.Age,
+		arg.HeightDesc,
+		arg.WeightDesc,
+		arg.College,
+		arg.JerseyNumber,
+		arg.SalaryDesc,
+		arg.Experience,
+	)
+	var i NflPlayerProfile
+	err := row.Scan(
+		&i.PlayerID,
+		&i.HeightCm,
+		&i.WeightKg,
+		&i.GroupRole,
+		&i.Position,
+		&i.Age,
+		&i.HeightDesc,
+		&i.WeightDesc,
+		&i.College,
+		&i.JerseyNumber,
+		&i.SalaryDesc,
+		&i.Experience,
+	)
+	return i, err
+}

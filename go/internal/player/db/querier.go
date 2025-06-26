@@ -19,6 +19,8 @@ type Querier interface {
 	GetNFLPlayerProfileByExternalID(ctx context.Context, arg GetNFLPlayerProfileByExternalIDParams) (NflPlayerProfile, error)
 	GetPlayer(ctx context.Context, id uuid.UUID) (Player, error)
 	GetPlayerByExternalID(ctx context.Context, arg GetPlayerByExternalIDParams) (Player, error)
+	UpdateNFLPlayerProfile(ctx context.Context, arg UpdateNFLPlayerProfileParams) (NflPlayerProfile, error)
+	UpdatePlayer(ctx context.Context, arg UpdatePlayerParams) (Player, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -19,6 +19,9 @@ type ProfileRepository interface {
 	// LoadProfile loads a sport-specific profile for a player
 	LoadProfile(ctx context.Context, q db.Querier, playerID uuid.UUID) (models.Profile, error)
 	
+	// UpdateProfile updates a sport-specific profile for a player
+	UpdateProfile(ctx context.Context, qtx db.Querier, playerID uuid.UUID, profile models.Profile) error
+	
 	// DeleteProfile deletes a sport-specific profile for a player
 	DeleteProfile(ctx context.Context, qtx db.Querier, playerID uuid.UUID) error
 }

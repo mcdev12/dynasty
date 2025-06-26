@@ -80,6 +80,37 @@ func (r *NFLProfileRepository) LoadProfile(ctx context.Context, q db.Querier, pl
 	return profile, nil
 }
 
+// UpdateProfile updates an NFL player profile
+func (r *NFLProfileRepository) UpdateProfile(ctx context.Context, qtx db.Querier, playerID uuid.UUID, profile models.Profile) error {
+	nflProfile, ok := profile.(*models.NFLPlayerProfile)
+	if !ok {
+		return fmt.Errorf("expected *models.NFLPlayerProfile, got %T", profile)
+	}
+
+	// Convert domain model to database params
+	params := db.UpdateNFLPlayerProfileParams{
+		PlayerID:     playerID,
+		HeightCm:     sqlutil.ToSqlInt32(nflProfile.HeightCm),
+		WeightKg:     sqlutil.ToSqlInt32(nflProfile.WeightKg),
+		GroupRole:    sql.NullString{String: nflProfile.GroupRole, Valid: nflProfile.GroupRole != ""},
+		Position:     sql.NullString{String: nflProfile.Position, Valid: nflProfile.Position != ""},
+		Age:          sqlutil.ToSqlInt32(nflProfile.Age),
+		HeightDesc:   sql.NullString{String: nflProfile.HeightDesc, Valid: nflProfile.HeightDesc != ""},
+		WeightDesc:   sql.NullString{String: nflProfile.WeightDesc, Valid: nflProfile.WeightDesc != ""},
+		College:      sqlutil.ToSqlString(nflProfile.College),
+		JerseyNumber: sqlutil.ToSqlInt16(nflProfile.JerseyNumber),
+		SalaryDesc:   sqlutil.ToSqlString(nflProfile.SalaryDesc),
+		Experience:   sqlutil.ToSqlInt16(nflProfile.Experience),
+	}
+
+	_, err := qtx.UpdateNFLPlayerProfile(ctx, params)
+	if err != nil {
+		return fmt.Errorf("failed to update NFL player profile: %w", err)
+	}
+
+	return nil
+}
+
 // DeleteProfile deletes an NFL player profile
 func (r *NFLProfileRepository) DeleteProfile(ctx context.Context, qtx db.Querier, playerID uuid.UUID) error {
 	err := qtx.DeleteNFLPlayerProfile(ctx, playerID)

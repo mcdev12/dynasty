@@ -102,3 +102,31 @@ func (q *Queries) GetPlayerByExternalID(ctx context.Context, arg GetPlayerByExte
 	)
 	return i, err
 }
+
+const updatePlayer = `-- name: UpdatePlayer :one
+UPDATE players SET
+    full_name = $2,
+    team_id = $3
+WHERE id = $1
+RETURNING id, sport_id, external_id, full_name, team_id, created_at
+`
+
+type UpdatePlayerParams struct {
+	ID       uuid.UUID     `json:"id"`
+	FullName string        `json:"full_name"`
+	TeamID   uuid.NullUUID `json:"team_id"`
+}
+
+func (q *Queries) UpdatePlayer(ctx context.Context, arg UpdatePlayerParams) (Player, error) {
+	row := q.db.QueryRowContext(ctx, updatePlayer, arg.ID, arg.FullName, arg.TeamID)
+	var i Player
+	err := row.Scan(
+		&i.ID,
+		&i.SportID,
+		&i.ExternalID,
+		&i.FullName,
+		&i.TeamID,
+		&i.CreatedAt,
+	)
+	return i, err
+}

@@ -35,5 +35,21 @@ SELECT npp.* FROM nfl_player_profiles npp
 JOIN players p ON npp.player_id = p.id
 WHERE p.sport_id = $1 AND p.external_id = $2;
 
+-- name: UpdateNFLPlayerProfile :one
+UPDATE nfl_player_profiles SET
+    height_cm = $2,
+    weight_kg = $3,
+    group_role = $4,
+    position = $5,
+    age = $6,
+    height_desc = $7,
+    weight_desc = $8,
+    college = $9,
+    jersey_number = $10,
+    salary_desc = $11,
+    experience = $12
+WHERE player_id = $1
+RETURNING *;
+
 -- name: DeleteNFLPlayerProfile :exec
 DELETE FROM nfl_player_profiles WHERE player_id = $1;
