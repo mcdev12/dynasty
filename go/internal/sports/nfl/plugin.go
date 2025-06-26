@@ -3,17 +3,19 @@ package nfl
 import (
 	"context"
 	"fmt"
+	sportradarclient "github.com/mcdev12/dynasty/go/clients/sport_radar_client"
 	"os"
 
-	sportsapi "github.com/mcdev12/dynasty/go/clients/sports_api_client"
+	sportsapiclient "github.com/mcdev12/dynasty/go/clients/sports_api_client"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"github.com/mcdev12/dynasty/go/internal/sports/base"
 )
 
 // NFLPlugin implements the SportPlugin interface for the NFL.
 type NFLPlugin struct {
-	api    *sportsapi.SportsApiClient
-	config Config
+	sportsApi  *sportsapiclient.SportsApiClient
+	sportRadar *sportradarclient.SportRadarClient
+	config     Config
 }
 
 // Config holds NFL-specific configuration.
@@ -34,22 +36,22 @@ func init() {
 // Init initializes the plugin, loading config and creating the API client.
 func (p *NFLPlugin) Init() error {
 	// Get API key from environment
-	apiKey := os.Getenv("SPORTS_API_KEY")
-	if apiKey == "" {
+	sportsApiKey := os.Getenv("SPORTS_API_KEY")
+	if sportsApiKey == "" {
 		return fmt.Errorf("SPORTS_API_KEY environment variable is required for NFL plugin")
 	}
 
 	p.config = Config{
-		APIKey: apiKey,
+		APIKey: sportsApiKey,
 	}
-	p.api = sportsapi.NewSportsApiClient(p.config.APIKey)
+	p.sportsApi = sportsapiclient.NewSportsApiClient(p.config.APIKey)
 	return nil
 }
 
 // FetchTeams retrieves NFL teams from the external API
-func (p *NFLPlugin) FetchTeams(ctx context.Context) ([]sportsapi.Team, error) {
+func (p *NFLPlugin) FetchTeams(ctx context.Context) ([]sportsapiclient.Team, error) {
 	// Use the sports API client to get NFL teams
-	teams, err := p.api.GetNFLTeams()
+	teams, err := p.sportsApi.GetNFLTeams()
 	if err != nil {
 		return nil, fmt.Errorf("nfl: failed to fetch teams from API: %w", err)
 	}
@@ -58,7 +60,7 @@ func (p *NFLPlugin) FetchTeams(ctx context.Context) ([]sportsapi.Team, error) {
 }
 
 // MapExternalTeam maps a sports API team to our internal teams domain model
-func (p *NFLPlugin) MapExternalTeam(apiTeam sportsapi.Team, sportID string) (*models.Team, error) {
+func (p *NFLPlugin) MapExternalTeam(apiTeam sportsapiclient.Team, sportID string) (*models.Team, error) {
 	team := &models.Team{
 		SportID:    sportID,
 		ExternalID: fmt.Sprintf("sportsapi_%d", apiTeam.ID), // Use API team ID as unique identifier
