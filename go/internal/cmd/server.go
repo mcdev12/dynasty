@@ -1,0 +1,72 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+
+	"connectrpc.com/grpcreflect"
+	"github.com/mcdev12/dynasty/go/internal/genproto/team/v1/teamv1connect"
+	"github.com/rs/cors"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+)
+
+func setupServer(services *Services) *http.Server {
+	mux := http.NewServeMux()
+
+	// Setup CORS middleware
+	c := cors.New(cors.Options{
+		AllowedMethods: []string{
+			http.MethodHead,
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+		},
+		AllowedOrigins: []string{"*"},
+		AllowedHeaders: []string{"*"},
+	})
+
+	// Register services
+	registerServices(mux, services)
+
+	// Setup reflection for grpcui/grpcurl
+	setupReflection(mux)
+
+	// Add health check endpoint
+	setupHealthCheck(mux)
+
+	// Wrap with CORS
+	handler := c.Handler(mux)
+
+	// Setup HTTP/2 server
+	return &http.Server{
+		Addr:    fmt.Sprintf(":%s", getEnv("PORT", "8080")),
+		Handler: h2c.NewHandler(handler, &http2.Server{}),
+	}
+}
+
+func registerServices(mux *http.ServeMux, services *Services) {
+	// Register team service
+	teamServicePath, teamServiceHandler := teamv1connect.NewTeamServiceHandler(services.Teams)
+	mux.Handle(teamServicePath, teamServiceHandler)
+}
+
+func setupReflection(mux *http.ServeMux) {
+	reflector := grpcreflect.NewStaticReflector(
+		teamv1connect.TeamServiceName,
+	)
+	mux.Handle(grpcreflect.NewHandlerV1(reflector))
+	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+}
+
+func setupHealthCheck(mux *http.ServeMux) {
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("OK")); err != nil {
+			log.Printf("Failed to write health check response: %v", err)
+		}
+	})
+}

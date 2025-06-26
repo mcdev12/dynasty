@@ -7,13 +7,13 @@ package db
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
 
 type Querier interface {
 	CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error)
-	DeleteTeam(ctx context.Context, id pgtype.UUID) error
-	GetTeam(ctx context.Context, id pgtype.UUID) (Team, error)
+	DeleteTeam(ctx context.Context, id uuid.UUID) error
+	GetTeam(ctx context.Context, id uuid.UUID) (Team, error)
 	GetTeamByExternalID(ctx context.Context, arg GetTeamByExternalIDParams) (Team, error)
 	ListAllTeams(ctx context.Context) ([]Team, error)
 	ListTeamsBySport(ctx context.Context, sportID string) ([]Team, error)

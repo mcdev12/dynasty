@@ -7,8 +7,9 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/google/uuid"
 )
 
 const createTeam = `-- name: CreateTeam :one
@@ -38,19 +39,19 @@ INSERT INTO teams (
 `
 
 type CreateTeamParams struct {
-	SportID         string      `json:"sport_id"`
-	ExternalID      string      `json:"external_id"`
-	Name            string      `json:"name"`
-	Code            string      `json:"code"`
-	City            string      `json:"city"`
-	Coach           pgtype.Text `json:"coach"`
-	Owner           pgtype.Text `json:"owner"`
-	Stadium         pgtype.Text `json:"stadium"`
-	EstablishedYear pgtype.Int4 `json:"established_year"`
+	SportID         string         `json:"sport_id"`
+	ExternalID      string         `json:"external_id"`
+	Name            string         `json:"name"`
+	Code            string         `json:"code"`
+	City            string         `json:"city"`
+	Coach           sql.NullString `json:"coach"`
+	Owner           sql.NullString `json:"owner"`
+	Stadium         sql.NullString `json:"stadium"`
+	EstablishedYear sql.NullInt32  `json:"established_year"`
 }
 
 func (q *Queries) CreateTeam(ctx context.Context, arg CreateTeamParams) (Team, error) {
-	row := q.db.QueryRow(ctx, createTeam,
+	row := q.db.QueryRowContext(ctx, createTeam,
 		arg.SportID,
 		arg.ExternalID,
 		arg.Name,
@@ -82,8 +83,8 @@ const deleteTeam = `-- name: DeleteTeam :exec
 DELETE FROM teams WHERE id = $1
 `
 
-func (q *Queries) DeleteTeam(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteTeam, id)
+func (q *Queries) DeleteTeam(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTeam, id)
 	return err
 }
 
@@ -91,8 +92,8 @@ const getTeam = `-- name: GetTeam :one
 SELECT id, sport_id, external_id, name, code, city, coach, owner, stadium, established_year, created_at FROM teams WHERE id = $1
 `
 
-func (q *Queries) GetTeam(ctx context.Context, id pgtype.UUID) (Team, error) {
-	row := q.db.QueryRow(ctx, getTeam, id)
+func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
+	row := q.db.QueryRowContext(ctx, getTeam, id)
 	var i Team
 	err := row.Scan(
 		&i.ID,
@@ -120,7 +121,7 @@ type GetTeamByExternalIDParams struct {
 }
 
 func (q *Queries) GetTeamByExternalID(ctx context.Context, arg GetTeamByExternalIDParams) (Team, error) {
-	row := q.db.QueryRow(ctx, getTeamByExternalID, arg.SportID, arg.ExternalID)
+	row := q.db.QueryRowContext(ctx, getTeamByExternalID, arg.SportID, arg.ExternalID)
 	var i Team
 	err := row.Scan(
 		&i.ID,
@@ -143,7 +144,7 @@ SELECT id, sport_id, external_id, name, code, city, coach, owner, stadium, estab
 `
 
 func (q *Queries) ListAllTeams(ctx context.Context) ([]Team, error) {
-	rows, err := q.db.Query(ctx, listAllTeams)
+	rows, err := q.db.QueryContext(ctx, listAllTeams)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +168,9 @@ func (q *Queries) ListAllTeams(ctx context.Context) ([]Team, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -179,7 +183,7 @@ SELECT id, sport_id, external_id, name, code, city, coach, owner, stadium, estab
 `
 
 func (q *Queries) ListTeamsBySport(ctx context.Context, sportID string) ([]Team, error) {
-	rows, err := q.db.Query(ctx, listTeamsBySport, sportID)
+	rows, err := q.db.QueryContext(ctx, listTeamsBySport, sportID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +207,9 @@ func (q *Queries) ListTeamsBySport(ctx context.Context, sportID string) ([]Team,
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -224,18 +231,18 @@ RETURNING id, sport_id, external_id, name, code, city, coach, owner, stadium, es
 `
 
 type UpdateTeamParams struct {
-	ID              pgtype.UUID `json:"id"`
-	Name            string      `json:"name"`
-	Code            string      `json:"code"`
-	City            string      `json:"city"`
-	Coach           pgtype.Text `json:"coach"`
-	Owner           pgtype.Text `json:"owner"`
-	Stadium         pgtype.Text `json:"stadium"`
-	EstablishedYear pgtype.Int4 `json:"established_year"`
+	ID              uuid.UUID      `json:"id"`
+	Name            string         `json:"name"`
+	Code            string         `json:"code"`
+	City            string         `json:"city"`
+	Coach           sql.NullString `json:"coach"`
+	Owner           sql.NullString `json:"owner"`
+	Stadium         sql.NullString `json:"stadium"`
+	EstablishedYear sql.NullInt32  `json:"established_year"`
 }
 
 func (q *Queries) UpdateTeam(ctx context.Context, arg UpdateTeamParams) (Team, error) {
-	row := q.db.QueryRow(ctx, updateTeam,
+	row := q.db.QueryRowContext(ctx, updateTeam,
 		arg.ID,
 		arg.Name,
 		arg.Code,

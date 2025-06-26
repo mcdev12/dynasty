@@ -5,44 +5,53 @@
 package db
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"database/sql"
+	"time"
+
+	"github.com/google/uuid"
 )
 
+type NflPlayerProfile struct {
+	PlayerID     uuid.UUID      `json:"player_id"`
+	HeightCm     sql.NullInt32  `json:"height_cm"`
+	WeightKg     sql.NullInt32  `json:"weight_kg"`
+	GroupRole    sql.NullString `json:"group_role"`
+	Position     sql.NullString `json:"position"`
+	Age          sql.NullInt32  `json:"age"`
+	HeightDesc   sql.NullString `json:"height_desc"`
+	WeightDesc   sql.NullString `json:"weight_desc"`
+	College      sql.NullString `json:"college"`
+	JerseyNumber sql.NullInt16  `json:"jersey_number"`
+	SalaryDesc   sql.NullString `json:"salary_desc"`
+	Experience   sql.NullInt16  `json:"experience"`
+}
+
 type Player struct {
-	ID           pgtype.UUID        `json:"id"`
-	SportID      string             `json:"sport_id"`
-	ExternalID   string             `json:"external_id"`
-	FullName     string             `json:"full_name"`
-	Age          pgtype.Int4        `json:"age"`
-	HeightDesc   pgtype.Text        `json:"height_desc"`
-	WeightDesc   pgtype.Text        `json:"weight_desc"`
-	College      pgtype.Text        `json:"college"`
-	GroupRole    pgtype.Text        `json:"group_role"`
-	Position     pgtype.Text        `json:"position"`
-	JerseyNumber pgtype.Int2        `json:"jersey_number"`
-	SalaryDesc   pgtype.Text        `json:"salary_desc"`
-	Experience   pgtype.Int2        `json:"experience"`
-	TeamID       pgtype.UUID        `json:"team_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID         uuid.UUID     `json:"id"`
+	SportID    string        `json:"sport_id"`
+	ExternalID string        `json:"external_id"`
+	FullName   string        `json:"full_name"`
+	TeamID     uuid.NullUUID `json:"team_id"`
+	CreatedAt  time.Time     `json:"created_at"`
 }
 
 type Sport struct {
-	ID        string             `json:"id"`
-	Name      string             `json:"name"`
-	PluginKey string             `json:"plugin_key"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	PluginKey string    `json:"plugin_key"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Team struct {
-	ID              pgtype.UUID        `json:"id"`
-	SportID         string             `json:"sport_id"`
-	ExternalID      string             `json:"external_id"`
-	Name            string             `json:"name"`
-	Code            string             `json:"code"`
-	City            string             `json:"city"`
-	Coach           pgtype.Text        `json:"coach"`
-	Owner           pgtype.Text        `json:"owner"`
-	Stadium         pgtype.Text        `json:"stadium"`
-	EstablishedYear pgtype.Int4        `json:"established_year"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	ID              uuid.UUID      `json:"id"`
+	SportID         string         `json:"sport_id"`
+	ExternalID      string         `json:"external_id"`
+	Name            string         `json:"name"`
+	Code            string         `json:"code"`
+	City            string         `json:"city"`
+	Coach           sql.NullString `json:"coach"`
+	Owner           sql.NullString `json:"owner"`
+	Stadium         sql.NullString `json:"stadium"`
+	EstablishedYear sql.NullInt32  `json:"established_year"`
+	CreatedAt       time.Time      `json:"created_at"`
 }

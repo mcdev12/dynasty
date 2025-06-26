@@ -5,20 +5,20 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/mcdev12/dynasty/go/internal/models"
+	"github.com/mcdev12/dynasty/go/internal/sqlutil"
 	"github.com/mcdev12/dynasty/go/internal/teams/db"
 )
 
 // Querier defines what the repository needs from the database layer
 type Querier interface {
 	CreateTeam(ctx context.Context, arg db.CreateTeamParams) (db.Team, error)
-	GetTeam(ctx context.Context, id pgtype.UUID) (db.Team, error)
+	GetTeam(ctx context.Context, id uuid.UUID) (db.Team, error)
 	GetTeamByExternalID(ctx context.Context, arg db.GetTeamByExternalIDParams) (db.Team, error)
 	ListTeamsBySport(ctx context.Context, sportID string) ([]db.Team, error)
 	ListAllTeams(ctx context.Context) ([]db.Team, error)
 	UpdateTeam(ctx context.Context, arg db.UpdateTeamParams) (db.Team, error)
-	DeleteTeam(ctx context.Context, id pgtype.UUID) error
+	DeleteTeam(ctx context.Context, id uuid.UUID) error
 }
 
 // Repository implements team data access operations
@@ -47,12 +47,7 @@ func (r *Repository) CreateTeam(ctx context.Context, req CreateTeamRequest) (*mo
 
 // GetTeam retrieves a team by ID
 func (r *Repository) GetTeam(ctx context.Context, id uuid.UUID) (*models.Team, error) {
-	pgUUID := pgtype.UUID{
-		Bytes: id,
-		Valid: true,
-	}
-
-	dbTeam, err := r.queries.GetTeam(ctx, pgUUID)
+	dbTeam, err := r.queries.GetTeam(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get team: %w", err)
 	}
@@ -119,12 +114,7 @@ func (r *Repository) UpdateTeam(ctx context.Context, id uuid.UUID, req UpdateTea
 
 // DeleteTeam deletes a team by ID
 func (r *Repository) DeleteTeam(ctx context.Context, id uuid.UUID) error {
-	pgUUID := pgtype.UUID{
-		Bytes: id,
-		Valid: true,
-	}
-
-	if err := r.queries.DeleteTeam(ctx, pgUUID); err != nil {
+	if err := r.queries.DeleteTeam(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete team: %w", err)
 	}
 
@@ -133,37 +123,23 @@ func (r *Repository) DeleteTeam(ctx context.Context, id uuid.UUID) error {
 
 // createTeamRequestToParams converts CreateTeamRequest to sqlc params
 func (r *Repository) createTeamRequestToParams(req CreateTeamRequest) db.CreateTeamParams {
-	params := db.CreateTeamParams{
-		SportID:    req.SportID,
-		ExternalID: req.ExternalID,
-		Name:       req.Name,
-		Code:       req.Code,
-		City:       req.City,
+	return db.CreateTeamParams{
+		SportID:         req.SportID,
+		ExternalID:      req.ExternalID,
+		Name:            req.Name,
+		Code:            req.Code,
+		City:            req.City,
+		Coach:           sqlutil.ToSqlString(req.Coach),
+		Owner:           sqlutil.ToSqlString(req.Owner),
+		Stadium:         sqlutil.ToSqlString(req.Stadium),
+		EstablishedYear: sqlutil.ToSqlInt32(req.EstablishedYear),
 	}
-
-	if req.Coach != nil {
-		params.Coach = pgtype.Text{String: *req.Coach, Valid: true}
-	}
-
-	if req.Owner != nil {
-		params.Owner = pgtype.Text{String: *req.Owner, Valid: true}
-	}
-
-	if req.Stadium != nil {
-		params.Stadium = pgtype.Text{String: *req.Stadium, Valid: true}
-	}
-
-	if req.EstablishedYear != nil {
-		params.EstablishedYear = pgtype.Int4{Int32: int32(*req.EstablishedYear), Valid: true}
-	}
-
-	return params
 }
 
 // updateTeamRequestToParams converts UpdateTeamRequest to sqlc params
 func (r *Repository) updateTeamRequestToParams(id uuid.UUID, req UpdateTeamRequest) db.UpdateTeamParams {
 	params := db.UpdateTeamParams{
-		ID: pgtype.UUID{Bytes: id, Valid: true},
+		ID: id,
 	}
 
 	if req.Name != nil {
@@ -179,19 +155,19 @@ func (r *Repository) updateTeamRequestToParams(id uuid.UUID, req UpdateTeamReque
 	}
 
 	if req.Coach != nil {
-		params.Coach = pgtype.Text{String: *req.Coach, Valid: true}
+		params.Coach = sqlutil.ToSqlString(req.Coach)
 	}
 
 	if req.Owner != nil {
-		params.Owner = pgtype.Text{String: *req.Owner, Valid: true}
+		params.Owner = sqlutil.ToSqlString(req.Owner)
 	}
 
 	if req.Stadium != nil {
-		params.Stadium = pgtype.Text{String: *req.Stadium, Valid: true}
+		params.Stadium = sqlutil.ToSqlString(req.Stadium)
 	}
 
 	if req.EstablishedYear != nil {
-		params.EstablishedYear = pgtype.Int4{Int32: int32(*req.EstablishedYear), Valid: true}
+		params.EstablishedYear = sqlutil.ToSqlInt32(req.EstablishedYear)
 	}
 
 	return params
@@ -199,32 +175,17 @@ func (r *Repository) updateTeamRequestToParams(id uuid.UUID, req UpdateTeamReque
 
 // dbTeamToModel converts a database team to domain model
 func (r *Repository) dbTeamToModel(dbTeam db.Team) *models.Team {
-	team := &models.Team{
-		ID:         uuid.UUID(dbTeam.ID.Bytes),
-		SportID:    dbTeam.SportID,
-		ExternalID: dbTeam.ExternalID,
-		Name:       dbTeam.Name,
-		Code:       dbTeam.Code,
-		City:       dbTeam.City,
-		CreatedAt:  dbTeam.CreatedAt.Time,
+	return &models.Team{
+		ID:              dbTeam.ID,
+		SportID:         dbTeam.SportID,
+		ExternalID:      dbTeam.ExternalID,
+		Name:            dbTeam.Name,
+		Code:            dbTeam.Code,
+		City:            dbTeam.City,
+		Coach:           sqlutil.FromSqlStringPtr(dbTeam.Coach),
+		Owner:           sqlutil.FromSqlStringPtr(dbTeam.Owner),
+		Stadium:         sqlutil.FromSqlStringPtr(dbTeam.Stadium),
+		EstablishedYear: sqlutil.FromSqlInt32(dbTeam.EstablishedYear),
+		CreatedAt:       dbTeam.CreatedAt,
 	}
-
-	if dbTeam.Coach.Valid {
-		team.Coach = &dbTeam.Coach.String
-	}
-
-	if dbTeam.Owner.Valid {
-		team.Owner = &dbTeam.Owner.String
-	}
-
-	if dbTeam.Stadium.Valid {
-		team.Stadium = &dbTeam.Stadium.String
-	}
-
-	if dbTeam.EstablishedYear.Valid {
-		year := int(dbTeam.EstablishedYear.Int32)
-		team.EstablishedYear = &year
-	}
-
-	return team
 }
