@@ -1,0 +1,85 @@
+syntax = "proto3";
+package player.v1;
+
+import "google/protobuf/timestamp.proto";
+import "player/v1/player_profile.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/player/v1;playerv1";
+
+// Player represents a sports player (core fields + optional profile)
+message Player {
+  string id           = 1;
+  string sport_id     = 2;
+  string external_id  = 3;
+  string full_name    = 4;
+  string team_id      = 5;
+  google.protobuf.Timestamp created_at = 6;
+
+  // Exactly one profile variant, or none
+  oneof profile {
+    PlayerProfile player_profile = 100;
+  }
+}
+
+// CreatePlayerRequest carries the data to create a new player
+message CreatePlayerRequest {
+  string sport_id           = 1;
+  string external_id        = 2;
+  string full_name          = 3;
+  string team_id            = 4;
+
+  // Optional profile
+  oneof profile {
+    PlayerProfile player_profile = 100;
+  }
+}
+
+// UpdatePlayerRequest carries the data to update an existing player
+message UpdatePlayerRequest {
+  string id                  = 1;
+  string full_name           = 2;
+  string team_id             = 3;
+
+  oneof profile {
+    PlayerProfile player_profile = 4;
+  }
+}
+
+// PlayerFilter represents filtering options
+message PlayerFilter {
+  string sport_id  = 1;
+  string team_id   = 2;
+  string position  = 3;  // for sport-specific filtering
+}
+
+// PaginationParams for paginated queries
+message PaginationParams {
+  int32 limit   = 1;
+  int32 offset  = 2;
+}
+
+// PlayerListResponse is a paginated list of players
+message PlayerListResponse {
+  repeated Player players = 1;
+  int32 total             = 2;
+  int32 limit             = 3;
+  int32 offset            = 4;
+  bool has_more           = 5;
+}
+
+// SyncResult is the outcome of an external sync operation
+message SyncResult {
+  int32 total_processed = 1;
+  int32 created         = 2;
+  int32 updated         = 3;
+  repeated string errors = 4;
+}
+
+// PlayerSortBy defines sort options
+enum PlayerSortBy {
+  PLAYER_SORT_BY_UNSPECIFIED = 0;
+  PLAYER_SORT_BY_NAME        = 1;
+  PLAYER_SORT_BY_POSITION    = 2;
+  PLAYER_SORT_BY_TEAM        = 3;
+  PLAYER_SORT_BY_CREATED_AT  = 4;
+}

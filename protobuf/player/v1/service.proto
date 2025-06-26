@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package player.v1;
+
+import "player/v1/player.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/player/v1;playerv1";
+
+// PlayerService provides player management operations
+service PlayerService {
+  // CreatePlayer creates a new player
+  rpc CreatePlayer(CreatePlayerRequest) returns (CreatePlayerResponse);
+  
+  // GetPlayer retrieves a player by ID
+  rpc GetPlayer(GetPlayerRequest) returns (GetPlayerResponse);
+  
+  // GetPlayerByExternalID retrieves a player by sport ID and external ID
+  rpc GetPlayerByExternalID(GetPlayerByExternalIDRequest) returns (GetPlayerByExternalIDResponse);
+  
+  // UpdatePlayer updates an existing player
+  rpc UpdatePlayer(UpdatePlayerRequest) returns (UpdatePlayerResponse);
+  
+  // DeletePlayer deletes a player by ID
+  rpc DeletePlayer(DeletePlayerRequest) returns (DeletePlayerResponse);
+  
+  // SyncPlayersFromAPI synchronizes players from external sports API for a specific team
+  rpc SyncPlayersFromAPI(SyncPlayersFromAPIRequest) returns (SyncPlayersFromAPIResponse);
+  
+  // SyncAllNFLPlayersFromAPI synchronizes all NFL players from external sports API
+  rpc SyncAllNFLPlayersFromAPI(SyncAllNFLPlayersFromAPIRequest) returns (SyncAllNFLPlayersFromAPIResponse);
+  
+  // GetPlayersWithFilter retrieves players with filtering and pagination
+  rpc GetPlayersWithFilter(GetPlayersWithFilterRequest) returns (GetPlayersWithFilterResponse);
+}
+
+// Request/Response messages for CreatePlayer
+message CreatePlayerResponse {
+  Player player = 1;
+}
+
+// Request/Response messages for GetPlayer
+message GetPlayerRequest {
+  string id = 1;
+}
+
+message GetPlayerResponse {
+  Player player = 1;
+}
+
+// Request/Response messages for GetPlayerByExternalID
+message GetPlayerByExternalIDRequest {
+  string sport_id = 1;
+  string external_id = 2;
+}
+
+message GetPlayerByExternalIDResponse {
+  Player player = 1;
+}
+
+// Request/Response messages for UpdatePlayer
+message UpdatePlayerResponse {
+  Player player = 1;
+}
+
+// Request/Response messages for DeletePlayer
+message DeletePlayerRequest {
+  string id = 1;
+}
+
+message DeletePlayerResponse {
+  bool success = 1;
+}
+
+// Request/Response messages for SyncPlayersFromAPI
+message SyncPlayersFromAPIRequest {
+  string team_alias = 1; // e.g., "SF", "KC"
+}
+
+message SyncPlayersFromAPIResponse {
+  SyncResult result = 1;
+}
+
+// Request/Response messages for SyncAllNFLPlayersFromAPI
+message SyncAllNFLPlayersFromAPIRequest {
+  // No parameters needed - syncs all NFL teams
+}
+
+message SyncAllNFLPlayersFromAPIResponse {
+  SyncResult result = 1;
+}
+
+// Request/Response messages for GetPlayersWithFilter
+message GetPlayersWithFilterRequest {
+  optional PlayerFilter filter = 1;
+  optional PaginationParams pagination = 2;
+  optional PlayerSortBy sort_by = 3;
+}
+
+message GetPlayersWithFilterResponse {
+  PlayerListResponse response = 1;
+}

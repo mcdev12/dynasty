@@ -5,9 +5,9 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
-	"github.com/mcdev12/dynasty/go/internal/models"
 	teamv1 "github.com/mcdev12/dynasty/go/internal/genproto/team/v1"
 	"github.com/mcdev12/dynasty/go/internal/genproto/team/v1/teamv1connect"
+	"github.com/mcdev12/dynasty/go/internal/models"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

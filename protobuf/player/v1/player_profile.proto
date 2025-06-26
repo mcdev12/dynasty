@@ -1,0 +1,29 @@
+syntax = "proto3";
+package player.v1;
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/player/v1;playerv1";
+
+// NFLPlayerProfile represents NFL-specific player attributes
+message NFLPlayerProfile {
+  string player_id      = 1;
+  int32  height_cm      = 2;
+  int32  weight_kg      = 3;
+  string group_role     = 4;
+  string position       = 5;
+  int32  age            = 6;
+  string height_desc    = 7;
+  string weight_desc    = 8;
+  string college        = 9;
+  int32  jersey_number  = 10;
+  string salary_desc    = 11;
+  int32  experience     = 12;
+}
+
+// PlayerProfile is a oneof wrapper for all sport-specific profiles
+message PlayerProfile {
+  oneof profile {
+    NFLPlayerProfile nfl_profile = 1;
+    // NBAPlayerProfile nba_profile = 2;
+    // MLBPlayerProfile mlb_profile = 3;
+  }
+}
