@@ -1,13 +1,17 @@
 include .env
 export
 
-.PHONY: db-up db-down migrate-up migrate-down migrate-create migrate-force migrate-version
+.PHONY: db-up db-down db-wipe migrate-up migrate-down migrate-create migrate-force migrate-version
 
 db-up:
 	cd go && docker-compose up -d postgres
 
 db-down:
 	cd go && docker-compose down
+
+# completely wipe the Postgres container + its volumes
+db-wipe:
+	cd go && docker-compose down -v
 
 .PHONY: migrate-up migrate-down migrate-create migrate-force migrate-version
 

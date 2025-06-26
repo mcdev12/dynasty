@@ -5,4 +5,5 @@ DROP TABLE IF EXISTS players;
 DROP TABLE IF EXISTS teams;
 
 -- 3. Drop sports
+DELETE FROM sports WHERE id IN ('nfl','nba');
 DROP TABLE IF EXISTS sports;

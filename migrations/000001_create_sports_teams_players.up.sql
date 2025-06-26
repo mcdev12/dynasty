@@ -6,6 +6,14 @@ CREATE TABLE sports
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 2) Seed it with your default rows
+INSERT INTO sports (id, name, plugin_key, created_at)
+VALUES ('nfl', 'National Football League', 'nfl', NOW()),
+       ('nba', 'National Basketball Assoc.', 'nba', NOW())
+ON CONFLICT (id) DO UPDATE
+    SET name       = EXCLUDED.name,
+        plugin_key = EXCLUDED.plugin_key;
+
 CREATE TABLE teams
 (
     id               UUID PRIMARY KEY,
@@ -24,20 +32,12 @@ CREATE TABLE teams
 
 CREATE TABLE players
 (
-    id            UUID PRIMARY KEY,
-    sport_id      TEXT        NOT NULL REFERENCES sports (id) ON DELETE RESTRICT ON UPDATE CASCADE,
-    external_id   TEXT        NOT NULL, -- ID from external API
-    full_name     TEXT        NOT NULL, -- 'Derek Carr'
-    age           INT,                  -- 31
-    height_desc   TEXT,                 -- '6'' 3"'
-    weight_desc   TEXT,                 -- '210 lbs'
-    college       TEXT,                 -- 'Fresno State'
-    group_role    TEXT,                 -- 'Offense'
-    position      TEXT,                 -- 'QB'
-    jersey_number SMALLINT,             -- 4
-    salary_desc   TEXT,                 -- '$19,375,000'
-    experience    SMALLINT,             -- 9
-    team_id       UUID        REFERENCES teams (id) ON DELETE SET NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    id          UUID PRIMARY KEY,
+    sport_id    TEXT        NOT NULL REFERENCES sports (id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    external_id TEXT        NOT NULL, -- ID from external API
+    full_name   TEXT        NOT NULL, -- 'Derek Carr'
+    team_id     UUID        REFERENCES teams (id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (sport_id, external_id)
 );
+
