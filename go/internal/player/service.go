@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -174,28 +175,19 @@ func (s *Service) playerToProto(player *models.Player) *playerv1.Player {
 func (s *Service) nflProfileToProto(profile *models.NFLPlayerProfile) *playerv1.NFLPlayerProfile {
 	proto := &playerv1.NFLPlayerProfile{
 		PlayerId:     profile.PlayerID.String(),
-		GroupRole:    profile.GroupRole,
 		Position:     profile.Position,
-		HeightDesc:   profile.HeightDesc,
-		WeightDesc:   profile.WeightDesc,
+		Status:       profile.Status,
+		College:      profile.College,
 		JerseyNumber: int32(profile.JerseyNumber),
 		Experience:   int32(profile.Experience),
+		HeightCm:     int32(profile.HeightCm),
+		WeightKg:     int32(profile.WeightKg),
+		HeightDesc:   profile.HeightDesc,
+		WeightDesc:   profile.WeightDesc,
 	}
 
-	if profile.HeightCm != nil {
-		proto.HeightCm = int32(*profile.HeightCm)
-	}
-	if profile.WeightKg != nil {
-		proto.WeightKg = int32(*profile.WeightKg)
-	}
-	if profile.Age != nil {
-		proto.Age = int32(*profile.Age)
-	}
-	if profile.College != nil {
-		proto.College = *profile.College
-	}
-	if profile.SalaryDesc != nil {
-		proto.SalaryDesc = *profile.SalaryDesc
+	if profile.BirthDate != nil {
+		proto.BirthDate = profile.BirthDate.Format("2006-01-02")
 	}
 
 	return proto
@@ -232,32 +224,25 @@ func (s *Service) protoToProfile(proto *playerv1.PlayerProfile) models.Profile {
 }
 
 func (s *Service) protoToNFLProfile(proto *playerv1.NFLPlayerProfile) *models.NFLPlayerProfile {
+	playerID, _ := uuid.Parse(proto.PlayerId)
+	
 	profile := &models.NFLPlayerProfile{
-		GroupRole:    proto.GroupRole,
+		PlayerID:     playerID,
 		Position:     proto.Position,
-		HeightDesc:   proto.HeightDesc,
-		WeightDesc:   proto.WeightDesc,
+		Status:       proto.Status,
+		College:      proto.College,
 		JerseyNumber: int(proto.JerseyNumber),
 		Experience:   int(proto.Experience),
+		HeightCm:     int(proto.HeightCm),
+		WeightKg:     int(proto.WeightKg),
+		HeightDesc:   proto.HeightDesc,
+		WeightDesc:   proto.WeightDesc,
 	}
 
-	if proto.HeightCm != 0 {
-		heightCm := int(proto.HeightCm)
-		profile.HeightCm = &heightCm
-	}
-	if proto.WeightKg != 0 {
-		weightKg := int(proto.WeightKg)
-		profile.WeightKg = &weightKg
-	}
-	if proto.Age != 0 {
-		age := int(proto.Age)
-		profile.Age = &age
-	}
-	if proto.College != "" {
-		profile.College = &proto.College
-	}
-	if proto.SalaryDesc != "" {
-		profile.SalaryDesc = &proto.SalaryDesc
+	if proto.BirthDate != "" {
+		if birthDate, err := time.Parse("2006-01-02", proto.BirthDate); err == nil {
+			profile.BirthDate = &birthDate
+		}
 	}
 
 	return profile

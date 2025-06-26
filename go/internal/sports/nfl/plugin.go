@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	sportradarclient "github.com/mcdev12/dynasty/go/clients/sport_radar_client"
 	sportsapiclient "github.com/mcdev12/dynasty/go/clients/sports_api_client"
@@ -132,25 +133,22 @@ func (p *NFLPlugin) FetchPlayers(ctx context.Context, teamAlias string) ([]sport
 func (p *NFLPlugin) MapExternalPlayer(srPlayer sportradarclient.SRPlayer) (*models.Player, error) {
 	// Create NFL profile with all available fields
 	profile := &models.NFLPlayerProfile{
-		Position:     srPlayer.Position,
-		College:      stringPtr(srPlayer.College),
-		Experience:   srPlayer.Experience,
-		HeightDesc:   fmt.Sprintf("%d\"", srPlayer.Height), // Convert inches to description
-		WeightDesc:   fmt.Sprintf("%.0f lbs", srPlayer.Weight),
-		GroupRole:    "", // TODO: Map from position to group role (Offense/Defense/Special Teams)
-		JerseyNumber: 0,  // Will be set below if available
+		Position:   srPlayer.Position,
+		Status:     srPlayer.Status,
+		College:    srPlayer.College,
+		Experience: srPlayer.Experience,
+		HeightDesc: fmt.Sprintf("%d\"", srPlayer.Height), // Convert inches to description
+		WeightDesc: fmt.Sprintf("%.0f lbs", srPlayer.Weight),
 	}
 
 	// Convert height from inches to cm
 	if srPlayer.Height > 0 {
-		heightCm := int(float64(srPlayer.Height) * 2.54)
-		profile.HeightCm = &heightCm
+		profile.HeightCm = int(float64(srPlayer.Height) * 2.54)
 	}
 
 	// Convert weight from pounds to kg
 	if srPlayer.Weight > 0 {
-		weightKg := int(srPlayer.Weight * 0.453592)
-		profile.WeightKg = &weightKg
+		profile.WeightKg = int(srPlayer.Weight * 0.453592)
 	}
 
 	// Parse jersey number
@@ -160,10 +158,17 @@ func (p *NFLPlugin) MapExternalPlayer(srPlayer sportradarclient.SRPlayer) (*mode
 		}
 	}
 
+	// Set birth date if available (keep as pointer since it can be null)
+	if srPlayer.BirthDate != "" {
+		if birthDate, err := time.Parse("2006-01-02", srPlayer.BirthDate); err == nil {
+			profile.BirthDate = &birthDate
+		}
+	}
+
 	// Create base player model with attached profile
 	player := &models.Player{
 		SportID:          "nfl",
-		ExternalID:       fmt.Sprintf("sr_%s", srPlayer.ID),
+		ExternalID:       fmt.Sprintf("sr_%s", srPlayer.SrID),
 		FullName:         srPlayer.Name,
 		NFLPlayerProfile: profile,
 		// TODO Team id is mapped in App. Think about how to handle free agents. Should team be optional?

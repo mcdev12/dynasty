@@ -30,17 +30,16 @@ func (r *NFLProfileRepository) CreateProfile(ctx context.Context, qtx db.Querier
 	// Convert domain model to database params
 	params := db.CreateNFLPlayerProfileParams{
 		PlayerID:     playerID,
-		HeightCm:     sqlutil.ToSqlInt32(nflProfile.HeightCm),
-		WeightKg:     sqlutil.ToSqlInt32(nflProfile.WeightKg),
-		GroupRole:    sql.NullString{String: nflProfile.GroupRole, Valid: nflProfile.GroupRole != ""},
 		Position:     sql.NullString{String: nflProfile.Position, Valid: nflProfile.Position != ""},
-		Age:          sqlutil.ToSqlInt32(nflProfile.Age),
+		Status:       sql.NullString{String: nflProfile.Status, Valid: nflProfile.Status != ""},
+		College:      sql.NullString{String: nflProfile.College, Valid: nflProfile.College != ""},
+		JerseyNumber: sqlutil.ToSqlInt16(nflProfile.JerseyNumber),
+		Experience:   sqlutil.ToSqlInt16(nflProfile.Experience),
+		BirthDate:    sqlutil.ToSqlTime(nflProfile.BirthDate),
+		HeightCm:     sql.NullInt32{Int32: int32(nflProfile.HeightCm), Valid: true},
+		WeightKg:     sql.NullInt32{Int32: int32(nflProfile.WeightKg), Valid: true},
 		HeightDesc:   sql.NullString{String: nflProfile.HeightDesc, Valid: nflProfile.HeightDesc != ""},
 		WeightDesc:   sql.NullString{String: nflProfile.WeightDesc, Valid: nflProfile.WeightDesc != ""},
-		College:      sqlutil.ToSqlString(nflProfile.College),
-		JerseyNumber: sqlutil.ToSqlInt16(nflProfile.JerseyNumber),
-		SalaryDesc:   sqlutil.ToSqlString(nflProfile.SalaryDesc),
-		Experience:   sqlutil.ToSqlInt16(nflProfile.Experience),
 	}
 	
 	_, err := qtx.CreateNFLPlayerProfile(ctx, params)
@@ -64,17 +63,16 @@ func (r *NFLProfileRepository) LoadProfile(ctx context.Context, q db.Querier, pl
 	// Convert database model to domain model
 	profile := &models.NFLPlayerProfile{
 		PlayerID:     playerID,
-		HeightCm:     sqlutil.FromSqlInt32(dbProfile.HeightCm),
-		WeightKg:     sqlutil.FromSqlInt32(dbProfile.WeightKg),
-		GroupRole:    sqlutil.FromSqlString(dbProfile.GroupRole, ""),
 		Position:     sqlutil.FromSqlString(dbProfile.Position, ""),
-		Age:          sqlutil.FromSqlInt32(dbProfile.Age),
+		Status:       sqlutil.FromSqlString(dbProfile.Status, ""),
+		College:      sqlutil.FromSqlString(dbProfile.College, ""),
+		JerseyNumber: sqlutil.FromSqlInt16(dbProfile.JerseyNumber),
+		Experience:   sqlutil.FromSqlInt16(dbProfile.Experience),
+		BirthDate:    sqlutil.FromSqlTime(dbProfile.BirthDate),
+		HeightCm:     int(dbProfile.HeightCm.Int32),
+		WeightKg:     int(dbProfile.WeightKg.Int32),
 		HeightDesc:   sqlutil.FromSqlString(dbProfile.HeightDesc, ""),
 		WeightDesc:   sqlutil.FromSqlString(dbProfile.WeightDesc, ""),
-		College:      sqlutil.FromSqlStringPtr(dbProfile.College),
-		JerseyNumber: sqlutil.FromSqlInt16(dbProfile.JerseyNumber),
-		SalaryDesc:   sqlutil.FromSqlStringPtr(dbProfile.SalaryDesc),
-		Experience:   sqlutil.FromSqlInt16(dbProfile.Experience),
 	}
 	
 	return profile, nil
@@ -90,17 +88,16 @@ func (r *NFLProfileRepository) UpdateProfile(ctx context.Context, qtx db.Querier
 	// Convert domain model to database params
 	params := db.UpdateNFLPlayerProfileParams{
 		PlayerID:     playerID,
-		HeightCm:     sqlutil.ToSqlInt32(nflProfile.HeightCm),
-		WeightKg:     sqlutil.ToSqlInt32(nflProfile.WeightKg),
-		GroupRole:    sql.NullString{String: nflProfile.GroupRole, Valid: nflProfile.GroupRole != ""},
 		Position:     sql.NullString{String: nflProfile.Position, Valid: nflProfile.Position != ""},
-		Age:          sqlutil.ToSqlInt32(nflProfile.Age),
+		Status:       sql.NullString{String: nflProfile.Status, Valid: nflProfile.Status != ""},
+		College:      sql.NullString{String: nflProfile.College, Valid: nflProfile.College != ""},
+		JerseyNumber: sqlutil.ToSqlInt16(nflProfile.JerseyNumber),
+		Experience:   sqlutil.ToSqlInt16(nflProfile.Experience),
+		BirthDate:    sqlutil.ToSqlTime(nflProfile.BirthDate),
+		HeightCm:     sql.NullInt32{Int32: int32(nflProfile.HeightCm), Valid: true},
+		WeightKg:     sql.NullInt32{Int32: int32(nflProfile.WeightKg), Valid: true},
 		HeightDesc:   sql.NullString{String: nflProfile.HeightDesc, Valid: nflProfile.HeightDesc != ""},
 		WeightDesc:   sql.NullString{String: nflProfile.WeightDesc, Valid: nflProfile.WeightDesc != ""},
-		College:      sqlutil.ToSqlString(nflProfile.College),
-		JerseyNumber: sqlutil.ToSqlInt16(nflProfile.JerseyNumber),
-		SalaryDesc:   sqlutil.ToSqlString(nflProfile.SalaryDesc),
-		Experience:   sqlutil.ToSqlInt16(nflProfile.Experience),
 	}
 
 	_, err := qtx.UpdateNFLPlayerProfile(ctx, params)

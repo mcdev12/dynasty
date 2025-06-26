@@ -15,17 +15,16 @@ import (
 const createNFLPlayerProfile = `-- name: CreateNFLPlayerProfile :one
 INSERT INTO nfl_player_profiles (
     player_id,
-    height_cm,
-    weight_kg,
-    group_role,
     position,
-    age,
-    height_desc,
-    weight_desc,
+    status,
     college,
     jersey_number,
-    salary_desc,
-    experience
+    experience,
+    birth_date,
+    height_cm,
+    weight_kg,
+    height_desc,
+    weight_desc
 ) VALUES (
     $1,
     $2,
@@ -37,55 +36,51 @@ INSERT INTO nfl_player_profiles (
     $8,
     $9,
     $10,
-    $11,
-    $12
-) RETURNING player_id, height_cm, weight_kg, group_role, position, age, height_desc, weight_desc, college, jersey_number, salary_desc, experience
+    $11
+) RETURNING player_id, position, status, college, jersey_number, experience, birth_date, height_cm, weight_kg, height_desc, weight_desc
 `
 
 type CreateNFLPlayerProfileParams struct {
 	PlayerID     uuid.UUID      `json:"player_id"`
-	HeightCm     sql.NullInt32  `json:"height_cm"`
-	WeightKg     sql.NullInt32  `json:"weight_kg"`
-	GroupRole    sql.NullString `json:"group_role"`
 	Position     sql.NullString `json:"position"`
-	Age          sql.NullInt32  `json:"age"`
-	HeightDesc   sql.NullString `json:"height_desc"`
-	WeightDesc   sql.NullString `json:"weight_desc"`
+	Status       sql.NullString `json:"status"`
 	College      sql.NullString `json:"college"`
 	JerseyNumber sql.NullInt16  `json:"jersey_number"`
-	SalaryDesc   sql.NullString `json:"salary_desc"`
 	Experience   sql.NullInt16  `json:"experience"`
+	BirthDate    sql.NullTime   `json:"birth_date"`
+	HeightCm     sql.NullInt32  `json:"height_cm"`
+	WeightKg     sql.NullInt32  `json:"weight_kg"`
+	HeightDesc   sql.NullString `json:"height_desc"`
+	WeightDesc   sql.NullString `json:"weight_desc"`
 }
 
 func (q *Queries) CreateNFLPlayerProfile(ctx context.Context, arg CreateNFLPlayerProfileParams) (NflPlayerProfile, error) {
 	row := q.db.QueryRowContext(ctx, createNFLPlayerProfile,
 		arg.PlayerID,
-		arg.HeightCm,
-		arg.WeightKg,
-		arg.GroupRole,
 		arg.Position,
-		arg.Age,
-		arg.HeightDesc,
-		arg.WeightDesc,
+		arg.Status,
 		arg.College,
 		arg.JerseyNumber,
-		arg.SalaryDesc,
 		arg.Experience,
+		arg.BirthDate,
+		arg.HeightCm,
+		arg.WeightKg,
+		arg.HeightDesc,
+		arg.WeightDesc,
 	)
 	var i NflPlayerProfile
 	err := row.Scan(
 		&i.PlayerID,
-		&i.HeightCm,
-		&i.WeightKg,
-		&i.GroupRole,
 		&i.Position,
-		&i.Age,
-		&i.HeightDesc,
-		&i.WeightDesc,
+		&i.Status,
 		&i.College,
 		&i.JerseyNumber,
-		&i.SalaryDesc,
 		&i.Experience,
+		&i.BirthDate,
+		&i.HeightCm,
+		&i.WeightKg,
+		&i.HeightDesc,
+		&i.WeightDesc,
 	)
 	return i, err
 }
@@ -100,7 +95,7 @@ func (q *Queries) DeleteNFLPlayerProfile(ctx context.Context, playerID uuid.UUID
 }
 
 const getNFLPlayerProfile = `-- name: GetNFLPlayerProfile :one
-SELECT player_id, height_cm, weight_kg, group_role, position, age, height_desc, weight_desc, college, jersey_number, salary_desc, experience FROM nfl_player_profiles WHERE player_id = $1
+SELECT player_id, position, status, college, jersey_number, experience, birth_date, height_cm, weight_kg, height_desc, weight_desc FROM nfl_player_profiles WHERE player_id = $1
 `
 
 func (q *Queries) GetNFLPlayerProfile(ctx context.Context, playerID uuid.UUID) (NflPlayerProfile, error) {
@@ -108,23 +103,22 @@ func (q *Queries) GetNFLPlayerProfile(ctx context.Context, playerID uuid.UUID) (
 	var i NflPlayerProfile
 	err := row.Scan(
 		&i.PlayerID,
-		&i.HeightCm,
-		&i.WeightKg,
-		&i.GroupRole,
 		&i.Position,
-		&i.Age,
-		&i.HeightDesc,
-		&i.WeightDesc,
+		&i.Status,
 		&i.College,
 		&i.JerseyNumber,
-		&i.SalaryDesc,
 		&i.Experience,
+		&i.BirthDate,
+		&i.HeightCm,
+		&i.WeightKg,
+		&i.HeightDesc,
+		&i.WeightDesc,
 	)
 	return i, err
 }
 
 const getNFLPlayerProfileByExternalID = `-- name: GetNFLPlayerProfileByExternalID :one
-SELECT npp.player_id, npp.height_cm, npp.weight_kg, npp.group_role, npp.position, npp.age, npp.height_desc, npp.weight_desc, npp.college, npp.jersey_number, npp.salary_desc, npp.experience FROM nfl_player_profiles npp
+SELECT npp.player_id, npp.position, npp.status, npp.college, npp.jersey_number, npp.experience, npp.birth_date, npp.height_cm, npp.weight_kg, npp.height_desc, npp.weight_desc FROM nfl_player_profiles npp
 JOIN players p ON npp.player_id = p.id
 WHERE p.sport_id = $1 AND p.external_id = $2
 `
@@ -139,82 +133,77 @@ func (q *Queries) GetNFLPlayerProfileByExternalID(ctx context.Context, arg GetNF
 	var i NflPlayerProfile
 	err := row.Scan(
 		&i.PlayerID,
-		&i.HeightCm,
-		&i.WeightKg,
-		&i.GroupRole,
 		&i.Position,
-		&i.Age,
-		&i.HeightDesc,
-		&i.WeightDesc,
+		&i.Status,
 		&i.College,
 		&i.JerseyNumber,
-		&i.SalaryDesc,
 		&i.Experience,
+		&i.BirthDate,
+		&i.HeightCm,
+		&i.WeightKg,
+		&i.HeightDesc,
+		&i.WeightDesc,
 	)
 	return i, err
 }
 
 const updateNFLPlayerProfile = `-- name: UpdateNFLPlayerProfile :one
 UPDATE nfl_player_profiles SET
-    height_cm = $2,
-    weight_kg = $3,
-    group_role = $4,
-    position = $5,
-    age = $6,
-    height_desc = $7,
-    weight_desc = $8,
-    college = $9,
-    jersey_number = $10,
-    salary_desc = $11,
-    experience = $12
+    position = $2,
+    status = $3,
+    college = $4,
+    jersey_number = $5,
+    experience = $6,
+    birth_date = $7,
+    height_cm = $8,
+    weight_kg = $9,
+    height_desc = $10,
+    weight_desc = $11
 WHERE player_id = $1
-RETURNING player_id, height_cm, weight_kg, group_role, position, age, height_desc, weight_desc, college, jersey_number, salary_desc, experience
+RETURNING player_id, position, status, college, jersey_number, experience, birth_date, height_cm, weight_kg, height_desc, weight_desc
 `
 
 type UpdateNFLPlayerProfileParams struct {
 	PlayerID     uuid.UUID      `json:"player_id"`
-	HeightCm     sql.NullInt32  `json:"height_cm"`
-	WeightKg     sql.NullInt32  `json:"weight_kg"`
-	GroupRole    sql.NullString `json:"group_role"`
 	Position     sql.NullString `json:"position"`
-	Age          sql.NullInt32  `json:"age"`
-	HeightDesc   sql.NullString `json:"height_desc"`
-	WeightDesc   sql.NullString `json:"weight_desc"`
+	Status       sql.NullString `json:"status"`
 	College      sql.NullString `json:"college"`
 	JerseyNumber sql.NullInt16  `json:"jersey_number"`
-	SalaryDesc   sql.NullString `json:"salary_desc"`
 	Experience   sql.NullInt16  `json:"experience"`
+	BirthDate    sql.NullTime   `json:"birth_date"`
+	HeightCm     sql.NullInt32  `json:"height_cm"`
+	WeightKg     sql.NullInt32  `json:"weight_kg"`
+	HeightDesc   sql.NullString `json:"height_desc"`
+	WeightDesc   sql.NullString `json:"weight_desc"`
 }
 
 func (q *Queries) UpdateNFLPlayerProfile(ctx context.Context, arg UpdateNFLPlayerProfileParams) (NflPlayerProfile, error) {
 	row := q.db.QueryRowContext(ctx, updateNFLPlayerProfile,
 		arg.PlayerID,
-		arg.HeightCm,
-		arg.WeightKg,
-		arg.GroupRole,
 		arg.Position,
-		arg.Age,
-		arg.HeightDesc,
-		arg.WeightDesc,
+		arg.Status,
 		arg.College,
 		arg.JerseyNumber,
-		arg.SalaryDesc,
 		arg.Experience,
+		arg.BirthDate,
+		arg.HeightCm,
+		arg.WeightKg,
+		arg.HeightDesc,
+		arg.WeightDesc,
 	)
 	var i NflPlayerProfile
 	err := row.Scan(
 		&i.PlayerID,
-		&i.HeightCm,
-		&i.WeightKg,
-		&i.GroupRole,
 		&i.Position,
-		&i.Age,
-		&i.HeightDesc,
-		&i.WeightDesc,
+		&i.Status,
 		&i.College,
 		&i.JerseyNumber,
-		&i.SalaryDesc,
 		&i.Experience,
+		&i.BirthDate,
+		&i.HeightCm,
+		&i.WeightKg,
+		&i.HeightDesc,
+		&i.WeightDesc,
 	)
 	return i, err
 }

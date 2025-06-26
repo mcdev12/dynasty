@@ -25,18 +25,17 @@ type Player struct {
 
 // NFLPlayerProfile represents NFL-specific player attributes
 type NFLPlayerProfile struct {
-	PlayerID     uuid.UUID `json:"player_id"`
-	HeightCm     *int      `json:"height_cm,omitempty"` // Optional - may not have metric data
-	WeightKg     *int      `json:"weight_kg,omitempty"` // Optional - may not have metric data
-	GroupRole    string    `json:"group_role"`          // 'Offense', 'Defense', 'Special Teams'
-	Position     string    `json:"position"`            // 'QB', 'RB', 'WR', etc.
-	Age          *int      `json:"age,omitempty"`       // Optional - may not be available
-	HeightDesc   string    `json:"height_desc"`         // '6'' 3"'
-	WeightDesc   string    `json:"weight_desc"`         // '210 lbs'
-	College      *string   `json:"college,omitempty"`   // Optional - some players may not have college
-	JerseyNumber int       `json:"jersey_number"`
-	SalaryDesc   *string   `json:"salary_desc,omitempty"` // Optional - salary may not be public
-	Experience   int       `json:"experience"`            // Years of experience
+	PlayerID     uuid.UUID  `json:"player_id"`
+	Position     string     `json:"position"`
+	Status       string     `json:"status"`
+	College      string     `json:"college"`
+	JerseyNumber int        `json:"jersey_number"`
+	Experience   int        `json:"experience"`
+	BirthDate    *time.Time `json:"birth_date,omitempty"` // Keep as pointer for null dates
+	HeightCm     int        `json:"height_cm"`
+	WeightKg     int        `json:"weight_kg"`
+	HeightDesc   string     `json:"height_desc"`
+	WeightDesc   string     `json:"weight_desc"`
 }
 
 // SportID returns the sport identifier for NFLPlayerProfile

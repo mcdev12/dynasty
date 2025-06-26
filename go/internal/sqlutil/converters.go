@@ -2,6 +2,7 @@ package sqlutil
 
 import (
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -76,4 +77,25 @@ func FromNullUUID(val uuid.NullUUID) *uuid.UUID {
 		return nil
 	}
 	return &val.UUID
+}
+
+// ToSqlTime converts a Go time pointer to sql.NullTime
+func ToSqlTime(val *time.Time) sql.NullTime {
+	if val == nil {
+		return sql.NullTime{Valid: false}
+	}
+	return sql.NullTime{Time: *val, Valid: true}
+}
+
+// FromSqlTime converts sql.NullTime to Go time pointer
+func FromSqlTime(val sql.NullTime) *time.Time {
+	if !val.Valid {
+		return nil
+	}
+	return &val.Time
+}
+
+// ToSqlInt32Direct converts a Go int to sql.NullInt32
+func ToSqlInt32Direct(val int) sql.NullInt32 {
+	return sql.NullInt32{Int32: int32(val), Valid: true}
 }

@@ -1,17 +1,16 @@
 -- name: CreateNFLPlayerProfile :one
 INSERT INTO nfl_player_profiles (
     player_id,
-    height_cm,
-    weight_kg,
-    group_role,
     position,
-    age,
-    height_desc,
-    weight_desc,
+    status,
     college,
     jersey_number,
-    salary_desc,
-    experience
+    experience,
+    birth_date,
+    height_cm,
+    weight_kg,
+    height_desc,
+    weight_desc
 ) VALUES (
     $1,
     $2,
@@ -23,8 +22,7 @@ INSERT INTO nfl_player_profiles (
     $8,
     $9,
     $10,
-    $11,
-    $12
+    $11
 ) RETURNING *;
 
 -- name: GetNFLPlayerProfile :one
@@ -37,17 +35,16 @@ WHERE p.sport_id = $1 AND p.external_id = $2;
 
 -- name: UpdateNFLPlayerProfile :one
 UPDATE nfl_player_profiles SET
-    height_cm = $2,
-    weight_kg = $3,
-    group_role = $4,
-    position = $5,
-    age = $6,
-    height_desc = $7,
-    weight_desc = $8,
-    college = $9,
-    jersey_number = $10,
-    salary_desc = $11,
-    experience = $12
+    position = $2,
+    status = $3,
+    college = $4,
+    jersey_number = $5,
+    experience = $6,
+    birth_date = $7,
+    height_cm = $8,
+    weight_kg = $9,
+    height_desc = $10,
+    weight_desc = $11
 WHERE player_id = $1
 RETURNING *;
 

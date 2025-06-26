@@ -13,17 +13,16 @@ import (
 
 type NflPlayerProfile struct {
 	PlayerID     uuid.UUID      `json:"player_id"`
-	HeightCm     sql.NullInt32  `json:"height_cm"`
-	WeightKg     sql.NullInt32  `json:"weight_kg"`
-	GroupRole    sql.NullString `json:"group_role"`
 	Position     sql.NullString `json:"position"`
-	Age          sql.NullInt32  `json:"age"`
-	HeightDesc   sql.NullString `json:"height_desc"`
-	WeightDesc   sql.NullString `json:"weight_desc"`
+	Status       sql.NullString `json:"status"`
 	College      sql.NullString `json:"college"`
 	JerseyNumber sql.NullInt16  `json:"jersey_number"`
-	SalaryDesc   sql.NullString `json:"salary_desc"`
 	Experience   sql.NullInt16  `json:"experience"`
+	BirthDate    sql.NullTime   `json:"birth_date"`
+	HeightCm     sql.NullInt32  `json:"height_cm"`
+	WeightKg     sql.NullInt32  `json:"weight_kg"`
+	HeightDesc   sql.NullString `json:"height_desc"`
+	WeightDesc   sql.NullString `json:"weight_desc"`
 }
 
 type Player struct {

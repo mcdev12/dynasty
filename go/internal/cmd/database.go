@@ -6,30 +6,23 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
+
+	"github.com/mcdev12/dynasty/go/internal/dbconfig"
 )
 
 func setupDatabase() (*sql.DB, error) {
-	dbConfig := DatabaseConfig{
-		Host:     getEnv("DB_HOST", "localhost"),
-		Port:     getEnvAsInt("DB_PORT", 5432),
-		User:     getEnv("DB_USER", "postgres"),
-		Password: getEnv("DB_PASSWORD", "postgres"),
-		Database: getEnv("DB_NAME", "dynasty"),
-		SSLMode:  getEnv("DB_SSLMODE", "disable"),
-	}
-
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		dbConfig.User, dbConfig.Password, dbConfig.Host, dbConfig.Port, dbConfig.Database, dbConfig.SSLMode)
+	cfg := dbconfig.NewConfigFromEnv()
+	dsn := cfg.DSN()
 
 	database, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create database connection: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
-
 	if err := database.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	log.Printf("Connected to database: %s@%s:%d/%s", dbConfig.User, dbConfig.Host, dbConfig.Port, dbConfig.Database)
+	log.Printf("Connected to database: %s@%s:%d/%s",
+		cfg.User, cfg.Host, cfg.Port, cfg.Database)
 	return database, nil
 }
