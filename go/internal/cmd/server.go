@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/mcdev12/dynasty/go/internal/genproto/user/v1/userv1connect"
 	"log"
 	"net/http"
 
@@ -57,12 +58,17 @@ func registerServices(mux *http.ServeMux, services *Services) {
 	// Register player service
 	playerServicePath, playerServiceHandler := playerv1connect.NewPlayerServiceHandler(services.Players)
 	mux.Handle(playerServicePath, playerServiceHandler)
+
+	// Register user service
+	userServicePath, userServiceHandler := userv1connect.NewUserServiceHandler(services.Users)
+	mux.Handle(userServicePath, userServiceHandler)
 }
 
 func setupReflection(mux *http.ServeMux) {
 	reflector := grpcreflect.NewStaticReflector(
 		teamv1connect.TeamServiceName,
 		playerv1connect.PlayerServiceName,
+		userv1connect.UserServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
