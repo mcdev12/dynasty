@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package league.v1;
+
+import "league/v1/league.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/league/v1;leaguev1";
+
+// LeagueService provides league management operations
+service LeagueService {
+  // CreateLeague creates a new league
+  rpc CreateLeague(CreateLeagueRequest) returns (CreateLeagueResponse);
+  
+  // GetLeague retrieves a league by ID
+  rpc GetLeague(GetLeagueRequest) returns (GetLeagueResponse);
+  
+  // GetLeaguesByCommissioner retrieves leagues by commissioner ID
+  rpc GetLeaguesByCommissioner(GetLeaguesByCommissionerRequest) returns (GetLeaguesByCommissionerResponse);
+
+  // UpdateLeague updates an existing league
+  rpc UpdateLeague(UpdateLeagueRequest) returns (UpdateLeagueResponse);
+  
+  // UpdateLeagueStatus updates only the status of a league
+  rpc UpdateLeagueStatus(UpdateLeagueStatusRequest) returns (UpdateLeagueStatusResponse);
+  
+  // UpdateLeagueSettings updates only the settings of a league
+  rpc UpdateLeagueSettings(UpdateLeagueSettingsRequest) returns (UpdateLeagueSettingsResponse);
+  
+  // DeleteLeague deletes a league by ID
+  rpc DeleteLeague(DeleteLeagueRequest) returns (DeleteLeagueResponse);
+}
+
+// CreateLeagueRequest represents the data needed to create a new league
+message CreateLeagueRequest {
+  string name = 1;
+  string sport_id = 2;
+  LeagueType league_type = 3;
+  string commissioner_id = 4;
+  google.protobuf.Struct league_settings = 5;
+  LeagueStatus league_status = 6;
+  string season = 7;
+}
+
+// Request/Response messages for CreateLeague
+message CreateLeagueResponse {
+  League league = 1;
+}
+
+// Request/Response messages for GetLeague
+message GetLeagueRequest {
+  string id = 1;
+}
+
+message GetLeagueResponse {
+  League league = 1;
+}
+
+// Request/Response messages for GetLeaguesByCommissioner
+message GetLeaguesByCommissionerRequest {
+  string commissioner_id = 1;
+}
+
+message GetLeaguesByCommissionerResponse {
+  repeated League leagues = 1;
+}
+
+// UpdateLeagueRequest represents the data that can be updated for a league
+message UpdateLeagueRequest {
+  string id = 1;
+  string name = 2;
+  string sport_id = 3;
+  LeagueType league_type = 4;
+  string commissioner_id = 5;
+  google.protobuf.Struct league_settings = 6;
+  LeagueStatus status = 7;
+  string season = 8;
+}
+
+// Request/Response messages for UpdateLeague
+message UpdateLeagueResponse {
+  League league = 1;
+}
+
+// UpdateLeagueStatusRequest represents a request to update only the league status
+message UpdateLeagueStatusRequest {
+  string id = 1;
+  LeagueStatus status = 2;
+}
+
+// Request/Response messages for UpdateLeagueStatus
+message UpdateLeagueStatusResponse {
+  League league = 1;
+}
+
+// UpdateLeagueSettingsRequest represents a request to update only the league settings
+message UpdateLeagueSettingsRequest {
+  string id = 1;
+  google.protobuf.Struct league_settings = 2;
+}
+
+
+// Request/Response messages for UpdateLeagueSettings
+message UpdateLeagueSettingsResponse {
+  League league = 1;
+}
+
+// Request/Response messages for DeleteLeague
+message DeleteLeagueRequest {
+  string id = 1;
+}
+
+message DeleteLeagueResponse {
+  bool success = 1;
+}

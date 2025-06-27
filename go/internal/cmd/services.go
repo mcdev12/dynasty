@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"github.com/mcdev12/dynasty/go/internal/leagues"
 	"github.com/mcdev12/dynasty/go/internal/users"
 
+	leaguedb "github.com/mcdev12/dynasty/go/internal/leagues/db"
 	"github.com/mcdev12/dynasty/go/internal/player"
 	playerdb "github.com/mcdev12/dynasty/go/internal/player/db"
 	"github.com/mcdev12/dynasty/go/internal/sports/base"
@@ -16,6 +18,7 @@ type Services struct {
 	Teams   *teams.Service
 	Players *player.Service
 	Users   *users.Service
+	League  *leagues.Service
 }
 
 func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Services {
@@ -40,9 +43,16 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	userApp := users.NewApp(userRepo)
 	userService := users.NewService(userApp)
 
+	// League
+	leagueQueries := leaguedb.New(database)
+	leagueRepo := leagues.NewRepository(leagueQueries)
+	leagueApp := leagues.NewApp(leagueRepo, userApp)
+	leagueService := leagues.NewService(leagueApp)
+
 	return &Services{
 		Teams:   teamsService,
 		Players: playerService,
 		Users:   userService,
+		League:  leagueService,
 	}
 }

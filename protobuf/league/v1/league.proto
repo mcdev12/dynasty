@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package league.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/league/v1;leaguev1";
+
+// League represents a fantasy sports league
+message League {
+  string id = 1;
+  string name = 2;
+  string sport_id = 3;
+  LeagueType league_type = 4;
+  string commissioner_id = 5;
+  google.protobuf.Struct league_settings = 6;
+  LeagueStatus status = 7;
+  string season = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// LeagueType represents the type of league
+enum LeagueType {
+  LEAGUE_TYPE_UNSPECIFIED = 0;
+  LEAGUE_TYPE_REDRAFT = 1;
+  LEAGUE_TYPE_KEEPER = 2;
+  LEAGUE_TYPE_DYNASTY = 3;
+}
+
+// LeagueStatus represents common league status values
+enum LeagueStatus {
+  LEAGUE_STATUS_UNSPECIFIED = 0;
+  LEAGUE_STATUS_PENDING = 1;
+  LEAGUE_STATUS_ACTIVE = 2;
+  LEAGUE_STATUS_COMPLETED = 3;
+  LEAGUE_STATUS_CANCELLED = 4;
+}
