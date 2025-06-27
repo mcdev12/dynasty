@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package fantasyteam.v1;
+
+import "fantasyteam/v1/fantasyteam.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1;fantasyteamv1";
+
+// FantasyTeamService provides fantasy team management operations
+service FantasyTeamService {
+  // CreateFantasyTeam creates a new fantasy team
+  rpc CreateFantasyTeam(CreateFantasyTeamRequest) returns (CreateFantasyTeamResponse);
+  
+  // GetFantasyTeam retrieves a fantasy team by ID
+  rpc GetFantasyTeam(GetFantasyTeamRequest) returns (GetFantasyTeamResponse);
+  
+  // GetFantasyTeamsByLeague retrieves fantasy teams by league ID
+  rpc GetFantasyTeamsByLeague(GetFantasyTeamsByLeagueRequest) returns (GetFantasyTeamsByLeagueResponse);
+  
+  // GetFantasyTeamsByOwner retrieves fantasy teams by owner ID
+  rpc GetFantasyTeamsByOwner(GetFantasyTeamsByOwnerRequest) returns (GetFantasyTeamsByOwnerResponse);
+  
+  // GetFantasyTeamByLeagueAndOwner retrieves a fantasy team by league and owner
+  rpc GetFantasyTeamByLeagueAndOwner(GetFantasyTeamByLeagueAndOwnerRequest) returns (GetFantasyTeamByLeagueAndOwnerResponse);
+
+  // UpdateFantasyTeam updates an existing fantasy team
+  rpc UpdateFantasyTeam(UpdateFantasyTeamRequest) returns (UpdateFantasyTeamResponse);
+  
+  // DeleteFantasyTeam deletes a fantasy team by ID
+  rpc DeleteFantasyTeam(DeleteFantasyTeamRequest) returns (DeleteFantasyTeamResponse);
+}
+
+// CreateFantasyTeamRequest represents the data needed to create a new fantasy team
+message CreateFantasyTeamRequest {
+  string league_id = 1;
+  string owner_id = 2;
+  string name = 3;
+  string logo_url = 4;
+}
+
+// Request/Response messages for CreateFantasyTeam
+message CreateFantasyTeamResponse {
+  FantasyTeam fantasy_team = 1;
+}
+
+// Request/Response messages for GetFantasyTeam
+message GetFantasyTeamRequest {
+  string id = 1;
+}
+
+message GetFantasyTeamResponse {
+  FantasyTeam fantasy_team = 1;
+}
+
+// Request/Response messages for GetFantasyTeamsByLeague
+message GetFantasyTeamsByLeagueRequest {
+  string league_id = 1;
+}
+
+message GetFantasyTeamsByLeagueResponse {
+  repeated FantasyTeam fantasy_teams = 1;
+}
+
+// Request/Response messages for GetFantasyTeamsByOwner
+message GetFantasyTeamsByOwnerRequest {
+  string owner_id = 1;
+}
+
+message GetFantasyTeamsByOwnerResponse {
+  repeated FantasyTeam fantasy_teams = 1;
+}
+
+// Request/Response messages for GetFantasyTeamByLeagueAndOwner
+message GetFantasyTeamByLeagueAndOwnerRequest {
+  string owner_id = 1;
+  string league_id = 2;
+}
+
+message GetFantasyTeamByLeagueAndOwnerResponse {
+  FantasyTeam fantasy_team = 1;
+}
+
+// UpdateFantasyTeamRequest represents the data that can be updated for a fantasy team
+message UpdateFantasyTeamRequest {
+  string id = 1;
+  string name = 2;
+  string logo_url = 3;
+}
+
+// Request/Response messages for UpdateFantasyTeam
+message UpdateFantasyTeamResponse {
+  FantasyTeam fantasy_team = 1;
+}
+
+// Request/Response messages for DeleteFantasyTeam
+message DeleteFantasyTeamRequest {
+  string id = 1;
+}
+
+message DeleteFantasyTeamResponse {
+  bool success = 1;
+}

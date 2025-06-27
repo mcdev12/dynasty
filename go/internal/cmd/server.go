@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1/fantasyteamv1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/league/v1/leaguev1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/user/v1/userv1connect"
 	"log"
@@ -67,6 +68,10 @@ func registerServices(mux *http.ServeMux, services *Services) {
 	// Register league service
 	leagueServicePath, leagueServiceHandler := leaguev1connect.NewLeagueServiceHandler(services.League)
 	mux.Handle(leagueServicePath, leagueServiceHandler)
+
+	// Register fantasy team service
+	fantasyTeamServicePath, fantasyTeamServiceHandler := fantasyteamv1connect.NewFantasyTeamServiceHandler(services.FantasyTeam)
+	mux.Handle(fantasyTeamServicePath, fantasyTeamServiceHandler)
 }
 
 func setupReflection(mux *http.ServeMux) {
@@ -75,6 +80,7 @@ func setupReflection(mux *http.ServeMux) {
 		playerv1connect.PlayerServiceName,
 		userv1connect.UserServiceName,
 		leaguev1connect.LeagueServiceName,
+		fantasyteamv1connect.FantasyTeamServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))

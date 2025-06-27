@@ -2,9 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
 	"github.com/mcdev12/dynasty/go/internal/leagues"
 	"github.com/mcdev12/dynasty/go/internal/users"
 
+	fantasyteamdb "github.com/mcdev12/dynasty/go/internal/fantasyteam/db"
 	leaguedb "github.com/mcdev12/dynasty/go/internal/leagues/db"
 	"github.com/mcdev12/dynasty/go/internal/player"
 	playerdb "github.com/mcdev12/dynasty/go/internal/player/db"
@@ -15,10 +17,11 @@ import (
 )
 
 type Services struct {
-	Teams   *teams.Service
-	Players *player.Service
-	Users   *users.Service
-	League  *leagues.Service
+	Teams       *teams.Service
+	Players     *player.Service
+	Users       *users.Service
+	League      *leagues.Service
+	FantasyTeam *fantasyteam.Service
 }
 
 func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Services {
@@ -49,10 +52,17 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	leagueApp := leagues.NewApp(leagueRepo, userApp)
 	leagueService := leagues.NewService(leagueApp)
 
+	// FantasyTeam
+	fantasyTeamQueries := fantasyteamdb.New(database)
+	fantasyTeamRepo := fantasyteam.NewRepository(fantasyTeamQueries)
+	fantasyTeamApp := fantasyteam.NewApp(fantasyTeamRepo, userApp, leagueApp)
+	fantasyTeamService := fantasyteam.NewService(fantasyTeamApp)
+
 	return &Services{
-		Teams:   teamsService,
-		Players: playerService,
-		Users:   userService,
-		League:  leagueService,
+		Teams:       teamsService,
+		Players:     playerService,
+		Users:       userService,
+		League:      leagueService,
+		FantasyTeam: fantasyTeamService,
 	}
 }

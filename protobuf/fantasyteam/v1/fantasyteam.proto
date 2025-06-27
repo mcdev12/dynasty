@@ -1,0 +1,19 @@
+syntax= "proto3";
+
+package fantasyteam.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1;fantasyteamv1";
+
+message FantasyTeam {
+  string id = 1;
+  string league_id = 2;
+  string owner_id = 3;
+  string name = 4;
+  string logo_url = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+
+
