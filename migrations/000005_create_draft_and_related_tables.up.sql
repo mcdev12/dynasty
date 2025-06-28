@@ -1,7 +1,7 @@
 CREATE TYPE draft_type AS ENUM ('SNAKE', 'AUCTION', 'ROOKIE');
 CREATE TYPE draft_status AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED');
 
-CREATE TABLE drafts
+CREATE TABLE draft
 (
     id           UUID PRIMARY KEY      DEFAULT gen_random_uuid(),
     league_id    UUID         NOT NULL REFERENCES leagues (id),
@@ -18,7 +18,7 @@ CREATE TABLE drafts
 CREATE TABLE draft_picks
 (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    draft_id       UUID    NOT NULL REFERENCES drafts (id),
+    draft_id       UUID    NOT NULL REFERENCES draft (id),
     round          INTEGER NOT NULL,
     pick           INTEGER NOT NULL,
     overall_pick   INTEGER NOT NULL,

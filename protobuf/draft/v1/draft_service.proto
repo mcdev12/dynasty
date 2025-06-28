@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package draft.v1;
+
+import "google/protobuf/timestamp.proto";
+import "draft/v1/draft.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/draft/v1;draftv1";
+
+// RPC service for managing drafts in the fantasy platform.
+service DraftService {
+  // CRUD Operations
+  rpc CreateDraft(CreateDraftRequest) returns (CreateDraftResponse);
+  rpc GetDraft(GetDraftRequest) returns (GetDraftResponse);
+  rpc ListDraftsForLeague(ListDraftsForLeagueRequest) returns (ListDraftsForLeagueResponse);
+  rpc UpdateDraft(UpdateDraftRequest) returns (UpdateDraftResponse);
+  rpc DeleteDraft(DeleteDraftRequest) returns (DeleteDraftResponse);
+}
+
+// Requests and responses:
+
+// CRUD Messages
+message CreateDraftRequest {
+  string league_id = 1;
+  DraftType draft_type = 2;
+  DraftSettings settings = 3;
+  google.protobuf.Timestamp scheduled_at = 4;
+}
+
+message CreateDraftResponse {
+  Draft draft = 1;
+}
+
+message GetDraftRequest {
+  string draft_id = 1;
+}
+
+message GetDraftResponse {
+  Draft draft = 1;
+}
+
+message ListDraftsForLeagueRequest {
+  string league_id = 1;
+}
+
+message ListDraftsForLeagueResponse {
+  repeated Draft drafts = 1;
+}
+
+message UpdateDraftRequest {
+  string draft_id = 1;
+  optional DraftSettings settings = 2;
+  optional DraftStatus status = 3;
+  optional google.protobuf.Timestamp scheduled_at = 4;
+}
+
+message UpdateDraftResponse {
+  Draft draft = 1;
+}
+
+message DeleteDraftRequest {
+  string draft_id = 1;
+}
+
+message DeleteDraftResponse {}
+

@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package draft.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/draft/v1;draftv1";
+
+// Enums
+enum DraftType {
+  DRAFT_TYPE_UNSPECIFIED = 0;
+  DRAFT_TYPE_SNAKE = 1;
+  DRAFT_TYPE_AUCTION = 2;
+  DRAFT_TYPE_ROOKIE = 3;
+}
+
+enum DraftStatus {
+  DRAFT_STATUS_UNSPECIFIED = 0;
+  DRAFT_STATUS_NOT_STARTED = 1;
+  DRAFT_STATUS_IN_PROGRESS = 2;
+  DRAFT_STATUS_PAUSED = 3;
+  DRAFT_STATUS_COMPLETED = 4;
+  DRAFT_STATUS_CANCELLED = 5;
+}
+
+// Messages
+message DraftSettings {
+  int32 rounds = 1;
+  int32 time_per_pick_sec = 2;
+  repeated string draft_order = 3; // list of fantasy_team_ids
+  bool third_round_reversal = 4;
+  optional double budget_per_team = 5; // auction
+  optional double min_bid_increment = 6; // auction
+  optional int32 time_per_nomination_sec = 7; // auction
+}
+
+message Draft {
+  string id = 1;
+  string league_id = 2;
+  DraftType draft_type = 3;
+  DraftStatus status = 4;
+  DraftSettings settings = 5;
+  google.protobuf.Timestamp scheduled_at = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message DraftPick {
+  string id = 1;
+  string draft_id = 2;
+  int32 round = 3;
+  int32 pick = 4; // pick number in round
+  int32 overall_pick = 5;
+  string team_id = 6;
+  string player_id = 7; // empty until picked
+  google.protobuf.Timestamp picked_at = 8;
+  optional double auction_amount = 9;
+  bool keeper_pick = 10;
+}

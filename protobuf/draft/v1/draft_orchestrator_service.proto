@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package draft.v1;
+
+import "draft/v1/draft.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/draft/v1;draftv1";
+
+// RPC service for managing drafts in the fantasy platform.
+service DraftOrchestratorService {
+  // Orchestration
+  rpc StartDraft(StartDraftRequest) returns (StartDraftResponse);
+  rpc MakePick(MakePickRequest) returns (MakePickResponse);
+  rpc PauseDraft(PauseDraftRequest) returns (PauseDraftResponse);
+  rpc ResumeDraft(ResumeDraftRequest) returns (ResumeDraftResponse);
+  rpc GetDraftStatus(GetDraftStatusRequest) returns (GetDraftStatusResponse);
+
+  // Real-time updates
+  rpc StreamDraftUpdates(StreamDraftUpdatesRequest) returns (stream StreamDraftUpdatesResponse);
+}
+
+// Requests and responses
+
+message StartDraftRequest {
+  string draft_id = 1;
+}
+
+message StartDraftResponse {
+  Draft draft = 1;
+}
+
+message MakePickRequest {
+  string draft_id = 1;
+  string team_id = 2;
+  string player_id = 3;
+}
+
+message MakePickResponse {
+  DraftPick pick = 1;
+}
+
+message PauseDraftRequest {
+  string draft_id = 1;
+}
+
+message PauseDraftResponse {
+  Draft draft = 1;
+}
+
+message ResumeDraftRequest {
+  string draft_id = 1;
+}
+
+message ResumeDraftResponse {
+  Draft draft = 1;
+}
+
+message GetDraftStatusRequest {
+  string draft_id = 1;
+}
+
+message GetDraftStatusResponse {
+  Draft draft = 1;
+  DraftPick current_pick = 2;
+  int32 seconds_remaining = 3;
+}
+
+// Streaming updates
+message StreamDraftUpdatesRequest {
+  string draft_id = 1;
+}
+
+message StreamDraftUpdatesResponse {
+  oneof event {
+    DraftPickMade pick_made = 1;
+    TimerUpdate timer_update = 2;
+    DraftCompleted draft_completed = 3;
+  }
+}
+
+message DraftPickMade {
+  DraftPick pick = 1;
+}
+
+message TimerUpdate {
+  int32 seconds_remaining = 1;
+}
+
+message DraftCompleted {
+  string draft_id = 1;
+}

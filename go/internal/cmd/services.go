@@ -2,11 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"github.com/mcdev12/dynasty/go/internal/draft"
 	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
 	"github.com/mcdev12/dynasty/go/internal/leagues"
 	"github.com/mcdev12/dynasty/go/internal/roster"
 	"github.com/mcdev12/dynasty/go/internal/users"
 
+	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
 	fantasyteamdb "github.com/mcdev12/dynasty/go/internal/fantasyteam/db"
 	leaguedb "github.com/mcdev12/dynasty/go/internal/leagues/db"
 	"github.com/mcdev12/dynasty/go/internal/player"
@@ -25,6 +27,7 @@ type Services struct {
 	League      *leagues.Service
 	FantasyTeam *fantasyteam.Service
 	Roster      *roster.Service
+	Draft       *draft.Service
 }
 
 func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Services {
@@ -61,10 +64,18 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	fantasyTeamApp := fantasyteam.NewApp(fantasyTeamRepo, userApp, leagueApp)
 	fantasyTeamService := fantasyteam.NewService(fantasyTeamApp)
 
+	// Roster players
 	rosterQueries := rosterdb.New(database)
 	rosterRepo := roster.NewRepository(rosterQueries)
 	rosterApp := roster.NewApp(rosterRepo, fantasyTeamRepo, playerRepo)
 	rosterService := roster.NewService(rosterApp)
+
+	// Draft Service
+	draftQueries := draftdb.New(database)
+	draftRepo := draft.NewRepository(draftQueries)
+	draftPickRepo := draft.NewDraftPickRepository(draftQueries)
+	draftApp := draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
+	draftService := draft.NewService(draftApp)
 
 	return &Services{
 		Teams:       teamsService,
@@ -73,5 +84,6 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 		League:      leagueService,
 		FantasyTeam: fantasyTeamService,
 		Roster:      rosterService,
+		Draft:       draftService,
 	}
 }

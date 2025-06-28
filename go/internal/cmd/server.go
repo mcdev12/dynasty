@@ -7,6 +7,7 @@ import (
 
 	"connectrpc.com/grpcreflect"
 
+	"github.com/mcdev12/dynasty/go/internal/genproto/draft/v1/draftv1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1/fantasyteamv1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/league/v1/leaguev1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/player/v1/playerv1connect"
@@ -78,6 +79,10 @@ func registerServices(mux *http.ServeMux, services *Services) {
 	// Register roster service
 	rosterServicePath, rosterServiceHandler := rosterv1connect.NewRosterServiceHandler(services.Roster)
 	mux.Handle(rosterServicePath, rosterServiceHandler)
+
+	// Draft service
+	draftServicePath, draftServiceHandler := draftv1connect.NewDraftServiceHandler(services.Draft)
+	mux.Handle(draftServicePath, draftServiceHandler)
 }
 
 func setupReflection(mux *http.ServeMux) {
@@ -88,6 +93,7 @@ func setupReflection(mux *http.ServeMux) {
 		leaguev1connect.LeagueServiceName,
 		fantasyteamv1connect.FantasyTeamServiceName,
 		rosterv1connect.RosterServiceName,
+		draftv1connect.DraftServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
