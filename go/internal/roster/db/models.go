@@ -236,7 +236,7 @@ type Player struct {
 	CreatedAt  time.Time     `json:"created_at"`
 }
 
-type Roster struct {
+type RosterPlayer struct {
 	ID              uuid.UUID             `json:"id"`
 	FantasyTeamID   uuid.UUID             `json:"fantasy_team_id"`
 	PlayerID        uuid.UUID             `json:"player_id"`

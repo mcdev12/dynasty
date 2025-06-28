@@ -16,7 +16,7 @@ CREATE TYPE acquisition_type_enum AS ENUM ('DRAFT', 'WAIVER', 'FREE_AGENT', 'TRA
 CREATE TYPE roster_position_enum AS ENUM ('STARTING', 'BENCH', 'IR', 'TAXI');
 
 -- Roster (static assignment)
-CREATE TABLE IF NOT EXISTS roster
+CREATE TABLE IF NOT EXISTS roster_players
 (
     id               UUID PRIMARY KEY               DEFAULT gen_random_uuid(),
     fantasy_team_id  UUID                  NOT NULL REFERENCES fantasy_teams (id),
@@ -29,5 +29,5 @@ CREATE TABLE IF NOT EXISTS roster
 );
 
 -- Index for common queries
-CREATE INDEX idx_roster_slots_team_position ON roster (fantasy_team_id, position);
-CREATE INDEX idx_roster_slots_player ON roster (player_id);
+CREATE INDEX idx_roster_slots_team_position ON roster_players (fantasy_team_id, position);
+CREATE INDEX idx_roster_slots_player ON roster_players (player_id);

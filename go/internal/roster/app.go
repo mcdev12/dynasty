@@ -11,7 +11,7 @@ import (
 
 // RosterRepository defines what the app layer needs from the repository
 type RosterRepository interface {
-	CreateRoster(ctx context.Context, req CreateRosterRequest) (*models.Roster, error)
+	CreateRosterPlayer(ctx context.Context, req CreateRosterPlayerRequest) (*models.Roster, error)
 	GetRoster(ctx context.Context, id uuid.UUID) (*models.Roster, error)
 	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]models.Roster, error)
 	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, fantasyTeamID uuid.UUID, position models.RosterPosition) ([]models.Roster, error)
@@ -53,9 +53,9 @@ func NewApp(repo RosterRepository, fantasyTeamsRepo FantasyTeamsRepository, play
 	}
 }
 
-// CreateRoster adds a player to a fantasy team's roster with validation
-func (a *App) CreateRoster(ctx context.Context, req CreateRosterRequest) (*models.Roster, error) {
-	if err := a.validateCreateRosterRequest(req); err != nil {
+// CreateRosterPlayer adds a player to a fantasy team's roster with validation
+func (a *App) CreateRosterPlayer(ctx context.Context, req CreateRosterPlayerRequest) (*models.Roster, error) {
+	if err := a.validateCreateRosterPlayerRequest(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
@@ -77,7 +77,7 @@ func (a *App) CreateRoster(ctx context.Context, req CreateRosterRequest) (*model
 		return nil, fmt.Errorf("player is already on this team's roster")
 	}
 
-	roster, err := a.repo.CreateRoster(ctx, req)
+	roster, err := a.repo.CreateRosterPlayer(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create roster entry: %w", err)
 	}
@@ -314,7 +314,7 @@ func (a *App) DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID) err
 
 // Validation methods
 
-func (a *App) validateCreateRosterRequest(req CreateRosterRequest) error {
+func (a *App) validateCreateRosterPlayerRequest(req CreateRosterPlayerRequest) error {
 	if req.FantasyTeamID == uuid.Nil {
 		return fmt.Errorf("fantasy_team_id is required")
 	}

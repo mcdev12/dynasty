@@ -10,7 +10,7 @@ option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/roster/v1;r
 // RosterService provides roster management operations
 service RosterService {
   // CreateRoster adds a player to a fantasy team's roster
-  rpc CreateRoster(CreateRosterRequest) returns (CreateRosterResponse);
+  rpc CreateRosterPlayer(CreateRosterPlayerRequest) returns (CreateRosterPlayerResponse);
   
   // GetRoster retrieves a roster entry by ID
   rpc GetRoster(GetRosterRequest) returns (GetRosterResponse);
@@ -53,7 +53,7 @@ service RosterService {
 }
 
 // CreateRosterRequest represents the data needed to add a player to a roster
-message CreateRosterRequest {
+message CreateRosterPlayerRequest {
   string fantasy_team_id = 1;
   string player_id = 2;
   RosterPosition position = 3;
@@ -61,7 +61,7 @@ message CreateRosterRequest {
   google.protobuf.Struct keeper_data = 5;
 }
 
-message CreateRosterResponse {
+message CreateRosterPlayerResponse {
   Roster roster = 1;
 }
 

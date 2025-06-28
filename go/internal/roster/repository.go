@@ -12,20 +12,20 @@ import (
 )
 
 type Querier interface {
-	CreateRoster(ctx context.Context, arg db.CreateRosterParams) (db.Roster, error)
+	CreateRosterPlayer(ctx context.Context, arg db.CreateRosterPlayerParams) (db.RosterPlayer, error)
 	DeletePlayerFromRoster(ctx context.Context, arg db.DeletePlayerFromRosterParams) error
 	DeleteRosterEntry(ctx context.Context, id uuid.UUID) error
 	DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID) error
-	GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]db.Roster, error)
-	GetPlayerOnRoster(ctx context.Context, arg db.GetPlayerOnRosterParams) (db.Roster, error)
-	GetRoster(ctx context.Context, id uuid.UUID) (db.Roster, error)
-	GetRosterPlayersByAcquisitionType(ctx context.Context, arg db.GetRosterPlayersByAcquisitionTypeParams) ([]db.Roster, error)
-	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]db.Roster, error)
-	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg db.GetRosterPlayersByFantasyTeamAndPositionParams) ([]db.Roster, error)
-	GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]db.Roster, error)
-	UpdateRosterPlayerKeeperData(ctx context.Context, arg db.UpdateRosterPlayerKeeperDataParams) (db.Roster, error)
-	UpdateRosterPlayerPosition(ctx context.Context, arg db.UpdateRosterPlayerPositionParams) (db.Roster, error)
-	UpdateRosterPositionAndKeeperData(ctx context.Context, arg db.UpdateRosterPositionAndKeeperDataParams) (db.Roster, error)
+	GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]db.RosterPlayer, error)
+	GetPlayerOnRoster(ctx context.Context, arg db.GetPlayerOnRosterParams) (db.RosterPlayer, error)
+	GetRoster(ctx context.Context, id uuid.UUID) (db.RosterPlayer, error)
+	GetRosterPlayersByAcquisitionType(ctx context.Context, arg db.GetRosterPlayersByAcquisitionTypeParams) ([]db.RosterPlayer, error)
+	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]db.RosterPlayer, error)
+	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg db.GetRosterPlayersByFantasyTeamAndPositionParams) ([]db.RosterPlayer, error)
+	GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]db.RosterPlayer, error)
+	UpdateRosterPlayerKeeperData(ctx context.Context, arg db.UpdateRosterPlayerKeeperDataParams) (db.RosterPlayer, error)
+	UpdateRosterPlayerPosition(ctx context.Context, arg db.UpdateRosterPlayerPositionParams) (db.RosterPlayer, error)
+	UpdateRosterPositionAndKeeperData(ctx context.Context, arg db.UpdateRosterPositionAndKeeperDataParams) (db.RosterPlayer, error)
 }
 
 type Repository struct {
@@ -38,7 +38,7 @@ func NewRepository(querier Querier) *Repository {
 	}
 }
 
-type CreateRosterRequest struct {
+type CreateRosterPlayerRequest struct {
 	FantasyTeamID   uuid.UUID              `json:"fantasy_team_id"`
 	PlayerID        uuid.UUID              `json:"player_id"`
 	Position        models.RosterPosition  `json:"position"`
@@ -65,8 +65,8 @@ type TransferPlayerRequest struct {
 	KeeperData      json.RawMessage        `json:"keeper_data"`
 }
 
-func (r *Repository) CreateRoster(ctx context.Context, req CreateRosterRequest) (*models.Roster, error) {
-	roster, err := r.queries.CreateRoster(ctx, db.CreateRosterParams{
+func (r *Repository) CreateRosterPlayer(ctx context.Context, req CreateRosterPlayerRequest) (*models.Roster, error) {
+	roster, err := r.queries.CreateRosterPlayer(ctx, db.CreateRosterPlayerParams{
 		FantasyTeamID:   req.FantasyTeamID,
 		PlayerID:        req.PlayerID,
 		Position:        db.RosterPositionEnum(req.Position),
@@ -213,7 +213,7 @@ func (r *Repository) DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UU
 	return nil
 }
 
-func (r *Repository) dbRosterToModel(dbRoster db.Roster) *models.Roster {
+func (r *Repository) dbRosterToModel(dbRoster db.RosterPlayer) *models.Roster {
 	var keeperData json.RawMessage
 	if dbRoster.KeeperData.Valid {
 		keeperData = dbRoster.KeeperData.RawMessage
@@ -230,7 +230,7 @@ func (r *Repository) dbRosterToModel(dbRoster db.Roster) *models.Roster {
 	}
 }
 
-func (r *Repository) dbRostersToModels(dbRosters []db.Roster) []models.Roster {
+func (r *Repository) dbRostersToModels(dbRosters []db.RosterPlayer) []models.Roster {
 	rosters := make([]models.Roster, len(dbRosters))
 	for i, dbRoster := range dbRosters {
 		rosters[i] = *r.dbRosterToModel(dbRoster)

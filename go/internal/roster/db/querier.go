@@ -11,20 +11,20 @@ import (
 )
 
 type Querier interface {
-	CreateRoster(ctx context.Context, arg CreateRosterParams) (Roster, error)
+	CreateRosterPlayer(ctx context.Context, arg CreateRosterPlayerParams) (RosterPlayer, error)
 	DeletePlayerFromRoster(ctx context.Context, arg DeletePlayerFromRosterParams) error
 	DeleteRosterEntry(ctx context.Context, id uuid.UUID) error
 	DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID) error
-	GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error)
-	GetPlayerOnRoster(ctx context.Context, arg GetPlayerOnRosterParams) (Roster, error)
-	GetRoster(ctx context.Context, id uuid.UUID) (Roster, error)
-	GetRosterPlayersByAcquisitionType(ctx context.Context, arg GetRosterPlayersByAcquisitionTypeParams) ([]Roster, error)
-	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error)
-	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg GetRosterPlayersByFantasyTeamAndPositionParams) ([]Roster, error)
-	GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error)
-	UpdateRosterPlayerKeeperData(ctx context.Context, arg UpdateRosterPlayerKeeperDataParams) (Roster, error)
-	UpdateRosterPlayerPosition(ctx context.Context, arg UpdateRosterPlayerPositionParams) (Roster, error)
-	UpdateRosterPositionAndKeeperData(ctx context.Context, arg UpdateRosterPositionAndKeeperDataParams) (Roster, error)
+	GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]RosterPlayer, error)
+	GetPlayerOnRoster(ctx context.Context, arg GetPlayerOnRosterParams) (RosterPlayer, error)
+	GetRoster(ctx context.Context, id uuid.UUID) (RosterPlayer, error)
+	GetRosterPlayersByAcquisitionType(ctx context.Context, arg GetRosterPlayersByAcquisitionTypeParams) ([]RosterPlayer, error)
+	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]RosterPlayer, error)
+	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg GetRosterPlayersByFantasyTeamAndPositionParams) ([]RosterPlayer, error)
+	GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]RosterPlayer, error)
+	UpdateRosterPlayerKeeperData(ctx context.Context, arg UpdateRosterPlayerKeeperDataParams) (RosterPlayer, error)
+	UpdateRosterPlayerPosition(ctx context.Context, arg UpdateRosterPlayerPositionParams) (RosterPlayer, error)
+	UpdateRosterPositionAndKeeperData(ctx context.Context, arg UpdateRosterPositionAndKeeperDataParams) (RosterPlayer, error)
 }
 
 var _ Querier = (*Queries)(nil)

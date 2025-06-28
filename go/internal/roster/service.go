@@ -15,7 +15,7 @@ import (
 
 // RosterApp defines what the service layer needs from the roster application
 type RosterApp interface {
-	CreateRoster(ctx context.Context, req CreateRosterRequest) (*models.Roster, error)
+	CreateRosterPlayer(ctx context.Context, req CreateRosterPlayerRequest) (*models.Roster, error)
 	GetRoster(ctx context.Context, id uuid.UUID) (*models.Roster, error)
 	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]models.Roster, error)
 	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, fantasyTeamID uuid.UUID, position models.RosterPosition) ([]models.Roster, error)
@@ -46,25 +46,25 @@ func NewService(app RosterApp) *Service {
 // Verify that Service implements the RosterServiceHandler interface
 var _ rosterv1connect.RosterServiceHandler = (*Service)(nil)
 
-// CreateRoster adds a player to a fantasy team's roster
-func (s *Service) CreateRoster(ctx context.Context, req *connect.Request[rosterv1.CreateRosterRequest]) (*connect.Response[rosterv1.CreateRosterResponse], error) {
+// CreateRosterPlayer adds a player to a fantasy team's roster
+func (s *Service) CreateRosterPlayer(ctx context.Context, req *connect.Request[rosterv1.CreateRosterPlayerRequest]) (*connect.Response[rosterv1.CreateRosterPlayerResponse], error) {
 	appReq, err := s.protoToCreateRosterRequest(req.Msg)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	roster, err := s.app.CreateRoster(ctx, appReq)
+	roster, err := s.app.CreateRosterPlayer(ctx, appReq)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	protoRoster, err := s.rosterToProto(roster)
+	protoRosterPlayer, err := s.rosterToProto(roster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&rosterv1.CreateRosterResponse{
-		Roster: protoRoster,
+	return connect.NewResponse(&rosterv1.CreateRosterPlayerResponse{
+		Roster: protoRosterPlayer,
 	}), nil
 }
 
@@ -423,27 +423,27 @@ func (s *Service) rostersToProto(rosters []models.Roster) ([]*rosterv1.Roster, e
 	return protoRosters, nil
 }
 
-func (s *Service) protoToCreateRosterRequest(proto *rosterv1.CreateRosterRequest) (CreateRosterRequest, error) {
+func (s *Service) protoToCreateRosterRequest(proto *rosterv1.CreateRosterPlayerRequest) (CreateRosterPlayerRequest, error) {
 	fantasyTeamID, err := uuid.Parse(proto.FantasyTeamId)
 	if err != nil {
-		return CreateRosterRequest{}, err
+		return CreateRosterPlayerRequest{}, err
 	}
 
 	playerID, err := uuid.Parse(proto.PlayerId)
 	if err != nil {
-		return CreateRosterRequest{}, err
+		return CreateRosterPlayerRequest{}, err
 	}
 
 	var keeperData json.RawMessage
 	if proto.KeeperData != nil {
 		keeperDataBytes, err := proto.KeeperData.MarshalJSON()
 		if err != nil {
-			return CreateRosterRequest{}, err
+			return CreateRosterPlayerRequest{}, err
 		}
 		keeperData = keeperDataBytes
 	}
 
-	return CreateRosterRequest{
+	return CreateRosterPlayerRequest{
 		FantasyTeamID:   fantasyTeamID,
 		PlayerID:        playerID,
 		Position:        s.protoToRosterPosition(proto.Position),

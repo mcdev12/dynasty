@@ -12,8 +12,8 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
-const createRoster = `-- name: CreateRoster :one
-INSERT INTO roster (
+const createRosterPlayer = `-- name: CreateRosterPlayer :one
+INSERT INTO roster_players (
     id,
     fantasy_team_id,
     player_id,
@@ -32,7 +32,7 @@ INSERT INTO roster (
 ) RETURNING id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data
 `
 
-type CreateRosterParams struct {
+type CreateRosterPlayerParams struct {
 	FantasyTeamID   uuid.UUID             `json:"fantasy_team_id"`
 	PlayerID        uuid.UUID             `json:"player_id"`
 	Position        RosterPositionEnum    `json:"position"`
@@ -40,15 +40,15 @@ type CreateRosterParams struct {
 	KeeperData      pqtype.NullRawMessage `json:"keeper_data"`
 }
 
-func (q *Queries) CreateRoster(ctx context.Context, arg CreateRosterParams) (Roster, error) {
-	row := q.db.QueryRowContext(ctx, createRoster,
+func (q *Queries) CreateRosterPlayer(ctx context.Context, arg CreateRosterPlayerParams) (RosterPlayer, error) {
+	row := q.db.QueryRowContext(ctx, createRosterPlayer,
 		arg.FantasyTeamID,
 		arg.PlayerID,
 		arg.Position,
 		arg.AcquisitionType,
 		arg.KeeperData,
 	)
-	var i Roster
+	var i RosterPlayer
 	err := row.Scan(
 		&i.ID,
 		&i.FantasyTeamID,
@@ -62,7 +62,7 @@ func (q *Queries) CreateRoster(ctx context.Context, arg CreateRosterParams) (Ros
 }
 
 const deletePlayerFromRoster = `-- name: DeletePlayerFromRoster :exec
-DELETE FROM roster 
+DELETE FROM roster_players
 WHERE fantasy_team_id = $1 AND player_id = $2
 `
 
@@ -77,7 +77,7 @@ func (q *Queries) DeletePlayerFromRoster(ctx context.Context, arg DeletePlayerFr
 }
 
 const deleteRosterEntry = `-- name: DeleteRosterEntry :exec
-DELETE FROM roster WHERE id = $1
+DELETE FROM roster_players WHERE id = $1
 `
 
 func (q *Queries) DeleteRosterEntry(ctx context.Context, id uuid.UUID) error {
@@ -86,7 +86,7 @@ func (q *Queries) DeleteRosterEntry(ctx context.Context, id uuid.UUID) error {
 }
 
 const deleteTeamRoster = `-- name: DeleteTeamRoster :exec
-DELETE FROM roster WHERE fantasy_team_id = $1
+DELETE FROM roster_players WHERE fantasy_team_id = $1
 `
 
 func (q *Queries) DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID) error {
@@ -95,20 +95,20 @@ func (q *Queries) DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID)
 }
 
 const getBenchRosterPlayers = `-- name: GetBenchRosterPlayers :many
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster 
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players
 WHERE fantasy_team_id = $1 AND position = 'BENCH'
 ORDER BY acquired_at
 `
 
-func (q *Queries) GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error) {
+func (q *Queries) GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]RosterPlayer, error) {
 	rows, err := q.db.QueryContext(ctx, getBenchRosterPlayers, fantasyTeamID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Roster
+	var items []RosterPlayer
 	for rows.Next() {
-		var i Roster
+		var i RosterPlayer
 		if err := rows.Scan(
 			&i.ID,
 			&i.FantasyTeamID,
@@ -132,7 +132,7 @@ func (q *Queries) GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.
 }
 
 const getPlayerOnRoster = `-- name: GetPlayerOnRoster :one
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster 
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players
 WHERE fantasy_team_id = $1 AND player_id = $2
 `
 
@@ -141,9 +141,9 @@ type GetPlayerOnRosterParams struct {
 	PlayerID      uuid.UUID `json:"player_id"`
 }
 
-func (q *Queries) GetPlayerOnRoster(ctx context.Context, arg GetPlayerOnRosterParams) (Roster, error) {
+func (q *Queries) GetPlayerOnRoster(ctx context.Context, arg GetPlayerOnRosterParams) (RosterPlayer, error) {
 	row := q.db.QueryRowContext(ctx, getPlayerOnRoster, arg.FantasyTeamID, arg.PlayerID)
-	var i Roster
+	var i RosterPlayer
 	err := row.Scan(
 		&i.ID,
 		&i.FantasyTeamID,
@@ -157,12 +157,12 @@ func (q *Queries) GetPlayerOnRoster(ctx context.Context, arg GetPlayerOnRosterPa
 }
 
 const getRoster = `-- name: GetRoster :one
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster WHERE id = $1
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players WHERE id = $1
 `
 
-func (q *Queries) GetRoster(ctx context.Context, id uuid.UUID) (Roster, error) {
+func (q *Queries) GetRoster(ctx context.Context, id uuid.UUID) (RosterPlayer, error) {
 	row := q.db.QueryRowContext(ctx, getRoster, id)
-	var i Roster
+	var i RosterPlayer
 	err := row.Scan(
 		&i.ID,
 		&i.FantasyTeamID,
@@ -176,7 +176,7 @@ func (q *Queries) GetRoster(ctx context.Context, id uuid.UUID) (Roster, error) {
 }
 
 const getRosterPlayersByAcquisitionType = `-- name: GetRosterPlayersByAcquisitionType :many
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster 
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players
 WHERE fantasy_team_id = $1 AND acquisition_type = $2
 ORDER BY acquired_at
 `
@@ -186,15 +186,15 @@ type GetRosterPlayersByAcquisitionTypeParams struct {
 	AcquisitionType AcquisitionTypeEnum `json:"acquisition_type"`
 }
 
-func (q *Queries) GetRosterPlayersByAcquisitionType(ctx context.Context, arg GetRosterPlayersByAcquisitionTypeParams) ([]Roster, error) {
+func (q *Queries) GetRosterPlayersByAcquisitionType(ctx context.Context, arg GetRosterPlayersByAcquisitionTypeParams) ([]RosterPlayer, error) {
 	rows, err := q.db.QueryContext(ctx, getRosterPlayersByAcquisitionType, arg.FantasyTeamID, arg.AcquisitionType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Roster
+	var items []RosterPlayer
 	for rows.Next() {
-		var i Roster
+		var i RosterPlayer
 		if err := rows.Scan(
 			&i.ID,
 			&i.FantasyTeamID,
@@ -218,19 +218,19 @@ func (q *Queries) GetRosterPlayersByAcquisitionType(ctx context.Context, arg Get
 }
 
 const getRosterPlayersByFantasyTeam = `-- name: GetRosterPlayersByFantasyTeam :many
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster WHERE fantasy_team_id = $1
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players WHERE fantasy_team_id = $1
 ORDER BY position, acquired_at
 `
 
-func (q *Queries) GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error) {
+func (q *Queries) GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]RosterPlayer, error) {
 	rows, err := q.db.QueryContext(ctx, getRosterPlayersByFantasyTeam, fantasyTeamID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Roster
+	var items []RosterPlayer
 	for rows.Next() {
-		var i Roster
+		var i RosterPlayer
 		if err := rows.Scan(
 			&i.ID,
 			&i.FantasyTeamID,
@@ -254,7 +254,7 @@ func (q *Queries) GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeam
 }
 
 const getRosterPlayersByFantasyTeamAndPosition = `-- name: GetRosterPlayersByFantasyTeamAndPosition :many
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster 
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players
 WHERE fantasy_team_id = $1 AND position = $2
 ORDER BY acquired_at
 `
@@ -264,15 +264,15 @@ type GetRosterPlayersByFantasyTeamAndPositionParams struct {
 	Position      RosterPositionEnum `json:"position"`
 }
 
-func (q *Queries) GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg GetRosterPlayersByFantasyTeamAndPositionParams) ([]Roster, error) {
+func (q *Queries) GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg GetRosterPlayersByFantasyTeamAndPositionParams) ([]RosterPlayer, error) {
 	rows, err := q.db.QueryContext(ctx, getRosterPlayersByFantasyTeamAndPosition, arg.FantasyTeamID, arg.Position)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Roster
+	var items []RosterPlayer
 	for rows.Next() {
-		var i Roster
+		var i RosterPlayer
 		if err := rows.Scan(
 			&i.ID,
 			&i.FantasyTeamID,
@@ -296,20 +296,20 @@ func (q *Queries) GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, 
 }
 
 const getStartingRosterPlayers = `-- name: GetStartingRosterPlayers :many
-SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster 
+SELECT id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data FROM roster_players
 WHERE fantasy_team_id = $1 AND position = 'STARTER'
 ORDER BY acquired_at
 `
 
-func (q *Queries) GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error) {
+func (q *Queries) GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]RosterPlayer, error) {
 	rows, err := q.db.QueryContext(ctx, getStartingRosterPlayers, fantasyTeamID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Roster
+	var items []RosterPlayer
 	for rows.Next() {
-		var i Roster
+		var i RosterPlayer
 		if err := rows.Scan(
 			&i.ID,
 			&i.FantasyTeamID,
@@ -333,7 +333,7 @@ func (q *Queries) GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uu
 }
 
 const updateRosterPlayerKeeperData = `-- name: UpdateRosterPlayerKeeperData :one
-UPDATE roster SET
+UPDATE roster_players SET
     keeper_data = $2
 WHERE id = $1
 RETURNING id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data
@@ -344,9 +344,9 @@ type UpdateRosterPlayerKeeperDataParams struct {
 	KeeperData pqtype.NullRawMessage `json:"keeper_data"`
 }
 
-func (q *Queries) UpdateRosterPlayerKeeperData(ctx context.Context, arg UpdateRosterPlayerKeeperDataParams) (Roster, error) {
+func (q *Queries) UpdateRosterPlayerKeeperData(ctx context.Context, arg UpdateRosterPlayerKeeperDataParams) (RosterPlayer, error) {
 	row := q.db.QueryRowContext(ctx, updateRosterPlayerKeeperData, arg.ID, arg.KeeperData)
-	var i Roster
+	var i RosterPlayer
 	err := row.Scan(
 		&i.ID,
 		&i.FantasyTeamID,
@@ -360,7 +360,7 @@ func (q *Queries) UpdateRosterPlayerKeeperData(ctx context.Context, arg UpdateRo
 }
 
 const updateRosterPlayerPosition = `-- name: UpdateRosterPlayerPosition :one
-UPDATE roster SET
+UPDATE roster_players SET
     position = $2
 WHERE id = $1
 RETURNING id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data
@@ -371,9 +371,9 @@ type UpdateRosterPlayerPositionParams struct {
 	Position RosterPositionEnum `json:"position"`
 }
 
-func (q *Queries) UpdateRosterPlayerPosition(ctx context.Context, arg UpdateRosterPlayerPositionParams) (Roster, error) {
+func (q *Queries) UpdateRosterPlayerPosition(ctx context.Context, arg UpdateRosterPlayerPositionParams) (RosterPlayer, error) {
 	row := q.db.QueryRowContext(ctx, updateRosterPlayerPosition, arg.ID, arg.Position)
-	var i Roster
+	var i RosterPlayer
 	err := row.Scan(
 		&i.ID,
 		&i.FantasyTeamID,
@@ -387,7 +387,7 @@ func (q *Queries) UpdateRosterPlayerPosition(ctx context.Context, arg UpdateRost
 }
 
 const updateRosterPositionAndKeeperData = `-- name: UpdateRosterPositionAndKeeperData :one
-UPDATE roster SET
+UPDATE roster_players SET
     position = $2,
     keeper_data = $3
 WHERE id = $1
@@ -400,9 +400,9 @@ type UpdateRosterPositionAndKeeperDataParams struct {
 	KeeperData pqtype.NullRawMessage `json:"keeper_data"`
 }
 
-func (q *Queries) UpdateRosterPositionAndKeeperData(ctx context.Context, arg UpdateRosterPositionAndKeeperDataParams) (Roster, error) {
+func (q *Queries) UpdateRosterPositionAndKeeperData(ctx context.Context, arg UpdateRosterPositionAndKeeperDataParams) (RosterPlayer, error) {
 	row := q.db.QueryRowContext(ctx, updateRosterPositionAndKeeperData, arg.ID, arg.Position, arg.KeeperData)
-	var i Roster
+	var i RosterPlayer
 	err := row.Scan(
 		&i.ID,
 		&i.FantasyTeamID,
