@@ -16,11 +16,15 @@ type Querier interface {
 	CreateDraftPickBatch(ctx context.Context, arg CreateDraftPickBatchParams) error
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 	DeleteDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) error
+	FetchUnsentOutbox(ctx context.Context, limit int32) ([]FetchUnsentOutboxRow, error)
 	GetDraft(ctx context.Context, id uuid.UUID) (Draft, error)
 	GetDraftPick(ctx context.Context, id uuid.UUID) (DraftPick, error)
 	GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]DraftPick, error)
 	GetDraftPicksByRound(ctx context.Context, arg GetDraftPicksByRoundParams) ([]DraftPick, error)
 	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (DraftPick, error)
+	InsertOutboxPickMade(ctx context.Context, arg InsertOutboxPickMadeParams) error
+	MakePick(ctx context.Context, arg MakePickParams) (int64, error)
+	MarkOutboxSent(ctx context.Context, ids []uuid.UUID) error
 	UpdateDraftPickPlayer(ctx context.Context, arg UpdateDraftPickPlayerParams) (DraftPick, error)
 	UpdateDraftStatus(ctx context.Context, arg UpdateDraftStatusParams) (Draft, error)
 }

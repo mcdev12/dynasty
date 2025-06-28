@@ -70,3 +70,9 @@ RETURNING *;
 
 -- name: DeleteDraftPicksByDraft :exec
 DELETE FROM draft_picks WHERE draft_id = $1;
+
+-- name: MakePick :execrows
+UPDATE draft_picks
+SET player_id = $2, picked_at = NOW()
+WHERE id = $1
+  AND player_id IS NULL;

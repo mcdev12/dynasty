@@ -3,6 +3,7 @@ package draft
 import (
 	"context"
 	"fmt"
+	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"log"
 
 	"github.com/google/uuid"
@@ -11,9 +12,9 @@ import (
 
 // DraftRepository defines what the app layer needs from the repository
 type DraftRepository interface {
-	CreateDraft(ctx context.Context, req CreateDraftRequest) (*models.Draft, error)
+	CreateDraft(ctx context.Context, req repository.CreateDraftRequest) (*models.Draft, error)
 	GetDraft(ctx context.Context, id uuid.UUID) (*models.Draft, error)
-	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req UpdateDraftStatusRequest) (*models.Draft, error)
+	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error)
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 }
 
@@ -46,7 +47,7 @@ func NewApp(repo DraftRepository, pickRepo DraftPickRepositoryImpl, leaguesRepo 
 }
 
 // CreateDraft creates a new draft with validation
-func (a *App) CreateDraft(ctx context.Context, req CreateDraftRequest) (*models.Draft, error) {
+func (a *App) CreateDraft(ctx context.Context, req repository.CreateDraftRequest) (*models.Draft, error) {
 	if err := a.validateCreateDraftRequest(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
@@ -81,7 +82,7 @@ func (a *App) GetDraft(ctx context.Context, id uuid.UUID) (*models.Draft, error)
 }
 
 // UpdateDraftStatus updates the status of a draft with validation
-func (a *App) UpdateDraftStatus(ctx context.Context, id uuid.UUID, req UpdateDraftStatusRequest) (*models.Draft, error) {
+func (a *App) UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error) {
 	if err := a.validateDraftStatus(req.Status); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
@@ -255,7 +256,7 @@ func (a *App) generateAuctionDraftPicks(draftID uuid.UUID, rounds int, draftOrde
 }
 
 // validateCreateDraftRequest validates create draft request
-func (a *App) validateCreateDraftRequest(req CreateDraftRequest) error {
+func (a *App) validateCreateDraftRequest(req repository.CreateDraftRequest) error {
 	if req.ID == uuid.Nil {
 		return fmt.Errorf("id is required")
 	}

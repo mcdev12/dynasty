@@ -292,6 +292,15 @@ type Draft struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
+type DraftOutbox struct {
+	ID        uuid.UUID       `json:"id"`
+	DraftID   uuid.UUID       `json:"draft_id"`
+	EventType string          `json:"event_type"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt time.Time       `json:"created_at"`
+	SentAt    sql.NullTime    `json:"sent_at"`
+}
+
 type DraftPick struct {
 	ID            uuid.UUID      `json:"id"`
 	DraftID       uuid.UUID      `json:"draft_id"`

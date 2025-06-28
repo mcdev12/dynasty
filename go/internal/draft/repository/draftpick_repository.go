@@ -1,8 +1,9 @@
-package draft
+package repository
 
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -12,27 +13,19 @@ import (
 	"github.com/mcdev12/dynasty/go/internal/models"
 )
 
-type DraftPickQuerier interface {
-	CreateDraftPick(ctx context.Context, arg db.CreateDraftPickParams) (db.DraftPick, error)
-	CreateDraftPickBatch(ctx context.Context, arg db.CreateDraftPickBatchParams) error
-	GetDraftPick(ctx context.Context, id uuid.UUID) (db.DraftPick, error)
-	GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]db.DraftPick, error)
-	GetDraftPicksByRound(ctx context.Context, arg db.GetDraftPicksByRoundParams) ([]db.DraftPick, error)
-	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (db.DraftPick, error)
-	UpdateDraftPickPlayer(ctx context.Context, arg db.UpdateDraftPickPlayerParams) (db.DraftPick, error)
-	DeleteDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) error
-}
-
 type DraftPickRepository struct {
-	queries DraftPickQuerier
+	queries *db.Queries
+	db      *sql.DB
 }
 
-func NewDraftPickRepository(querier DraftPickQuerier) *DraftPickRepository {
+func NewDraftPickRepository(queries *db.Queries, db *sql.DB) *DraftPickRepository {
 	return &DraftPickRepository{
-		queries: querier,
+		queries: queries,
+		db:      db,
 	}
 }
 
+// TODO fix in migration don't accept null player uuids
 type CreateDraftPickRequest struct {
 	ID            uuid.UUID  `json:"id"`
 	DraftID       uuid.UUID  `json:"draft_id"`
@@ -51,7 +44,7 @@ type UpdateDraftPickPlayerRequest struct {
 	KeeperPick    bool      `json:"keeper_pick"`
 }
 
-func (r *DraftPickRepository) CreateDraftPick(ctx context.Context, req CreateDraftPickRequest) (*models.DraftPick, error) {
+func (dp *DraftPickRepository) CreateDraftPick(ctx context.Context, req CreateDraftPickRequest) (*models.DraftPick, error) {
 	var playerID uuid.NullUUID
 	if req.PlayerID != nil {
 		playerID = uuid.NullUUID{UUID: *req.PlayerID, Valid: true}
@@ -68,7 +61,7 @@ func (r *DraftPickRepository) CreateDraftPick(ctx context.Context, req CreateDra
 		pickedAt = sql.NullTime{Valid: false} // Let SQL handle NOW()
 	}
 
-	pick, err := r.queries.CreateDraftPick(ctx, db.CreateDraftPickParams{
+	pick, err := dp.queries.CreateDraftPick(ctx, db.CreateDraftPickParams{
 		ID:            req.ID,
 		DraftID:       req.DraftID,
 		Round:         int32(req.Round),
@@ -84,10 +77,10 @@ func (r *DraftPickRepository) CreateDraftPick(ctx context.Context, req CreateDra
 		return nil, fmt.Errorf("failed to create draft pick: %w", err)
 	}
 
-	return r.dbDraftPickToModel(pick), nil
+	return dp.dbDraftPickToModel(pick), nil
 }
 
-func (r *DraftPickRepository) CreateDraftPicksBatch(ctx context.Context, picks []models.DraftPick) error {
+func (dp *DraftPickRepository) CreateDraftPicksBatch(ctx context.Context, picks []models.DraftPick) error {
 	if len(picks) == 0 {
 		return nil
 	}
@@ -109,13 +102,13 @@ func (r *DraftPickRepository) CreateDraftPicksBatch(ctx context.Context, picks [
 		teamIDs[i] = pick.TeamID
 	}
 
-	err := r.queries.CreateDraftPickBatch(ctx, db.CreateDraftPickBatchParams{
-		Column1: ids,        // $1::uuid[]
-		Column2: draftIDs,   // $2::uuid[]
-		Column3: rounds,     // $3::integer[]
-		Column4: pickNumbers, // $4::integer[]
+	err := dp.queries.CreateDraftPickBatch(ctx, db.CreateDraftPickBatchParams{
+		Column1: ids,          // $1::uuid[]
+		Column2: draftIDs,     // $2::uuid[]
+		Column3: rounds,       // $3::integer[]
+		Column4: pickNumbers,  // $4::integer[]
 		Column5: overallPicks, // $5::integer[]
-		Column6: teamIDs,    // $6::uuid[]
+		Column6: teamIDs,      // $6::uuid[]
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create draft picks batch: %w", err)
@@ -124,26 +117,26 @@ func (r *DraftPickRepository) CreateDraftPicksBatch(ctx context.Context, picks [
 	return nil
 }
 
-func (r *DraftPickRepository) GetDraftPick(ctx context.Context, id uuid.UUID) (*models.DraftPick, error) {
-	pick, err := r.queries.GetDraftPick(ctx, id)
+func (dp *DraftPickRepository) GetDraftPick(ctx context.Context, id uuid.UUID) (*models.DraftPick, error) {
+	pick, err := dp.queries.GetDraftPick(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get draft pick: %w", err)
 	}
 
-	return r.dbDraftPickToModel(pick), nil
+	return dp.dbDraftPickToModel(pick), nil
 }
 
-func (r *DraftPickRepository) GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]models.DraftPick, error) {
-	picks, err := r.queries.GetDraftPicksByDraft(ctx, draftID)
+func (dp *DraftPickRepository) GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]models.DraftPick, error) {
+	picks, err := dp.queries.GetDraftPicksByDraft(ctx, draftID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get draft picks by draft: %w", err)
 	}
 
-	return r.dbDraftPicksToModels(picks), nil
+	return dp.dbDraftPicksToModels(picks), nil
 }
 
-func (r *DraftPickRepository) GetDraftPicksByRound(ctx context.Context, draftID uuid.UUID, round int) ([]models.DraftPick, error) {
-	picks, err := r.queries.GetDraftPicksByRound(ctx, db.GetDraftPicksByRoundParams{
+func (dp *DraftPickRepository) GetDraftPicksByRound(ctx context.Context, draftID uuid.UUID, round int) ([]models.DraftPick, error) {
+	picks, err := dp.queries.GetDraftPicksByRound(ctx, db.GetDraftPicksByRoundParams{
 		DraftID: draftID,
 		Round:   int32(round),
 	})
@@ -151,25 +144,25 @@ func (r *DraftPickRepository) GetDraftPicksByRound(ctx context.Context, draftID 
 		return nil, fmt.Errorf("failed to get draft picks by round: %w", err)
 	}
 
-	return r.dbDraftPicksToModels(picks), nil
+	return dp.dbDraftPicksToModels(picks), nil
 }
 
-func (r *DraftPickRepository) GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error) {
-	pick, err := r.queries.GetNextPickForDraft(ctx, draftID)
+func (dp *DraftPickRepository) GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error) {
+	pick, err := dp.queries.GetNextPickForDraft(ctx, draftID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get next pick for draft: %w", err)
 	}
 
-	return r.dbDraftPickToModel(pick), nil
+	return dp.dbDraftPickToModel(pick), nil
 }
 
-func (r *DraftPickRepository) UpdateDraftPickPlayer(ctx context.Context, id uuid.UUID, req UpdateDraftPickPlayerRequest) (*models.DraftPick, error) {
+func (dp *DraftPickRepository) UpdateDraftPickPlayer(ctx context.Context, id uuid.UUID, req UpdateDraftPickPlayerRequest) (*models.DraftPick, error) {
 	var auctionAmount sql.NullString
 	if req.AuctionAmount != nil {
 		auctionAmount = sql.NullString{String: fmt.Sprintf("%.2f", *req.AuctionAmount), Valid: true}
 	}
 
-	pick, err := r.queries.UpdateDraftPickPlayer(ctx, db.UpdateDraftPickPlayerParams{
+	pick, err := dp.queries.UpdateDraftPickPlayer(ctx, db.UpdateDraftPickPlayerParams{
 		ID:            id,
 		PlayerID:      uuid.NullUUID{UUID: req.PlayerID, Valid: true},
 		AuctionAmount: auctionAmount,
@@ -179,13 +172,67 @@ func (r *DraftPickRepository) UpdateDraftPickPlayer(ctx context.Context, id uuid
 		return nil, fmt.Errorf("failed to update draft pick player: %w", err)
 	}
 
-	return r.dbDraftPickToModel(pick), nil
+	return dp.dbDraftPickToModel(pick), nil
 }
 
 func (r *DraftPickRepository) DeleteDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) error {
 	if err := r.queries.DeleteDraftPicksByDraft(ctx, draftID); err != nil {
 		return fmt.Errorf("failed to delete draft picks by draft: %w", err)
 	}
+	return nil
+}
+
+// MakePick creates a txn and does a dual write to the draft pick table and the outbox.
+// The outbox is then responsible for emitting events to our worker.
+func (dp *DraftPickRepository) MakePick(ctx context.Context, pickID, playerID, draftID, teamID uuid.UUID, overall int32) error {
+
+	txn, err := dp.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer func() {
+		if err != nil {
+			_ = txn.Rollback()
+		}
+	}()
+
+	tctx := db.New(txn)
+
+	// Update draft pick
+	rows, err := tctx.MakePick(ctx, db.MakePickParams{
+		ID:       pickID,
+		PlayerID: uuid.NullUUID{UUID: playerID, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("update pick: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("error already picked")
+	}
+
+	// 2) INSERT draft_outbox
+	payload, err := json.Marshal(struct {
+		PickID, PlayerID, TeamID uuid.UUID
+		Overall                  int32
+	}{pickID, playerID, teamID, overall})
+	if err != nil {
+		return fmt.Errorf("marshal pick: %w", err)
+	}
+
+	err = tctx.InsertOutboxPickMade(ctx, db.InsertOutboxPickMadeParams{
+		DraftID: draftID,
+		Payload: payload,
+	})
+	if err != nil {
+		return fmt.Errorf("insert outbox pick made: %w", err)
+	}
+
+	// Commit the transaction
+	if err := txn.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 

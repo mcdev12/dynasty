@@ -261,6 +261,26 @@ func (q *Queries) GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (D
 	return i, err
 }
 
+const makePick = `-- name: MakePick :execrows
+UPDATE draft_picks
+SET player_id = $2, picked_at = NOW()
+WHERE id = $1
+  AND player_id IS NULL
+`
+
+type MakePickParams struct {
+	ID       uuid.UUID     `json:"id"`
+	PlayerID uuid.NullUUID `json:"player_id"`
+}
+
+func (q *Queries) MakePick(ctx context.Context, arg MakePickParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, makePick, arg.ID, arg.PlayerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateDraftPickPlayer = `-- name: UpdateDraftPickPlayer :one
 UPDATE draft_picks SET
     player_id = $2,

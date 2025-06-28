@@ -2,6 +2,7 @@ package draft
 
 import (
 	"context"
+	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -13,9 +14,9 @@ import (
 
 // DraftApp defines what the service layer needs from the draft application
 type DraftApp interface {
-	CreateDraft(ctx context.Context, req CreateDraftRequest) (*models.Draft, error)
+	CreateDraft(ctx context.Context, req repository.CreateDraftRequest) (*models.Draft, error)
 	GetDraft(ctx context.Context, id uuid.UUID) (*models.Draft, error)
-	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req UpdateDraftStatusRequest) (*models.Draft, error)
+	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error)
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 	PrepopulateDraftPicks(ctx context.Context, draftID uuid.UUID) error
 }
@@ -104,7 +105,7 @@ func (s *Service) UpdateDraft(ctx context.Context, req *connect.Request[draftv1.
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	appReq := UpdateDraftStatusRequest{
+	appReq := repository.UpdateDraftStatusRequest{
 		Status: s.protoToDraftStatus(*req.Msg.Status),
 	}
 
@@ -164,13 +165,13 @@ func (s *Service) draftToProto(draft *models.Draft) (*draftv1.Draft, error) {
 	return protoDraft, nil
 }
 
-func (s *Service) protoToCreateDraftRequest(proto *draftv1.CreateDraftRequest) (CreateDraftRequest, error) {
+func (s *Service) protoToCreateDraftRequest(proto *draftv1.CreateDraftRequest) (repository.CreateDraftRequest, error) {
 	leagueID, err := uuid.Parse(proto.LeagueId)
 	if err != nil {
-		return CreateDraftRequest{}, err
+		return repository.CreateDraftRequest{}, err
 	}
 
-	req := CreateDraftRequest{
+	req := repository.CreateDraftRequest{
 		ID:        uuid.New(), // Generate new UUID for draft
 		LeagueID:  leagueID,
 		DraftType: s.protoToDraftType(proto.DraftType),

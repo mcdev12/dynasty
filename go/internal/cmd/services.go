@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"github.com/mcdev12/dynasty/go/internal/draft"
+	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
 	"github.com/mcdev12/dynasty/go/internal/leagues"
 	"github.com/mcdev12/dynasty/go/internal/roster"
@@ -72,8 +73,8 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 
 	// Draft Service
 	draftQueries := draftdb.New(database)
-	draftRepo := draft.NewRepository(draftQueries)
-	draftPickRepo := draft.NewDraftPickRepository(draftQueries)
+	draftRepo := repository.NewRepository(draftQueries)
+	draftPickRepo := repository.NewDraftPickRepository(draftQueries)
 	draftApp := draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
 	draftService := draft.NewService(draftApp)
 
