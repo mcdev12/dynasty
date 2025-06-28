@@ -21,7 +21,7 @@ type Roster struct {
 type RosterPosition string
 
 const (
-	RosterPositionStarter RosterPosition = "STARTER"
+	RosterPositionStarter RosterPosition = "STARTING"
 	RosterPositionBench   RosterPosition = "BENCH"
 	RosterPositionIR      RosterPosition = "IR"
 	RosterPositionTaxi    RosterPosition = "TAXI"

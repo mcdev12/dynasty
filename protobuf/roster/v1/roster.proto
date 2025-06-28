@@ -1,0 +1,36 @@
+syntax = "proto3";
+package roster.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/roster/v1;rosterv1";
+
+
+message Roster {
+  string id = 1;
+  string fantasy_team_id = 2;
+  string player_id = 3;
+  RosterPosition roster_position = 4;
+  AcquisitionType acquisition_type = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Struct keeper_data = 7;
+
+}
+
+enum RosterPosition {
+  ROSTER_POSITION_UNSPECIFIED = 0;
+  ROSTER_POSITION_STARTING= 1;
+  ROSTER_POSITION_BENCH = 2;
+  ROSTER_POSITION_IR = 3;
+  ROSTER_POSITION_TAXI = 4;
+}
+
+enum AcquisitionType {
+  ACQUISITION_TYPE_UNSPECIFIED = 0;
+  ACQUISITION_TYPE_DRAFT = 1;
+  ACQUISITION_TYPE_WAIVER = 2;
+  ACQUISITION_TYPE_FREE_AGENT = 3;
+  ACQUISITION_TYPE_TRADE = 4;
+  ACQUISITION_TYPE_KEEPER = 5;
+}

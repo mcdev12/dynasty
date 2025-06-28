@@ -67,15 +67,6 @@ UPDATE roster SET
 WHERE id = $1
 RETURNING *;
 
--- name: TransferPlayerToTeam :one
-UPDATE roster SET
-    fantasy_team_id = $2,
-    acquired_at = NOW(),
-    acquisition_type = $3,
-    keeper_data = $4
-WHERE id = $1
-RETURNING *;
-
 -- name: DeleteRosterEntry :exec
 DELETE FROM roster WHERE id = $1;
 

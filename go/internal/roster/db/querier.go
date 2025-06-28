@@ -22,7 +22,6 @@ type Querier interface {
 	GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error)
 	GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, arg GetRosterPlayersByFantasyTeamAndPositionParams) ([]Roster, error)
 	GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]Roster, error)
-	TransferPlayerToTeam(ctx context.Context, arg TransferPlayerToTeamParams) (Roster, error)
 	UpdateRosterPlayerKeeperData(ctx context.Context, arg UpdateRosterPlayerKeeperDataParams) (Roster, error)
 	UpdateRosterPlayerPosition(ctx context.Context, arg UpdateRosterPlayerPositionParams) (Roster, error)
 	UpdateRosterPositionAndKeeperData(ctx context.Context, arg UpdateRosterPositionAndKeeperDataParams) (Roster, error)

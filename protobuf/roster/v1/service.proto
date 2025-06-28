@@ -1,0 +1,191 @@
+syntax = "proto3";
+
+package roster.v1;
+
+import "roster/v1/roster.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/roster/v1;rosterv1";
+
+// RosterService provides roster management operations
+service RosterService {
+  // CreateRoster adds a player to a fantasy team's roster
+  rpc CreateRoster(CreateRosterRequest) returns (CreateRosterResponse);
+  
+  // GetRoster retrieves a roster entry by ID
+  rpc GetRoster(GetRosterRequest) returns (GetRosterResponse);
+  
+  // GetRosterPlayersByFantasyTeam retrieves all players on a team's roster
+  rpc GetRosterPlayersByFantasyTeam(GetRosterPlayersByFantasyTeamRequest) returns (GetRosterPlayersByFantasyTeamResponse);
+  
+  // GetRosterPlayersByFantasyTeamAndPosition retrieves players by team and position
+  rpc GetRosterPlayersByFantasyTeamAndPosition(GetRosterPlayersByFantasyTeamAndPositionRequest) returns (GetRosterPlayersByFantasyTeamAndPositionResponse);
+  
+  // GetPlayerOnRoster checks if a specific player is on a team's roster
+  rpc GetPlayerOnRoster(GetPlayerOnRosterRequest) returns (GetPlayerOnRosterResponse);
+  
+  // GetStartingRosterPlayers retrieves all starting players for a team
+  rpc GetStartingRosterPlayers(GetStartingRosterPlayersRequest) returns (GetStartingRosterPlayersResponse);
+  
+  // GetBenchRosterPlayers retrieves all bench players for a team
+  rpc GetBenchRosterPlayers(GetBenchRosterPlayersRequest) returns (GetBenchRosterPlayersResponse);
+  
+  // GetRosterPlayersByAcquisitionType retrieves players by how they were acquired
+  rpc GetRosterPlayersByAcquisitionType(GetRosterPlayersByAcquisitionTypeRequest) returns (GetRosterPlayersByAcquisitionTypeResponse);
+  
+  // UpdateRosterPlayerPosition updates a player's position on the roster
+  rpc UpdateRosterPlayerPosition(UpdateRosterPlayerPositionRequest) returns (UpdateRosterPlayerPositionResponse);
+  
+  // UpdateRosterPlayerKeeperData updates a player's keeper data
+  rpc UpdateRosterPlayerKeeperData(UpdateRosterPlayerKeeperDataRequest) returns (UpdateRosterPlayerKeeperDataResponse);
+  
+  // UpdateRosterPositionAndKeeperData updates both position and keeper data
+  rpc UpdateRosterPositionAndKeeperData(UpdateRosterPositionAndKeeperDataRequest) returns (UpdateRosterPositionAndKeeperDataResponse);
+
+  // DeleteRosterEntry removes a specific roster entry
+  rpc DeleteRosterEntry(DeleteRosterEntryRequest) returns (DeleteRosterEntryResponse);
+  
+  // DeletePlayerFromRoster removes a player from a team's roster
+  rpc DeletePlayerFromRoster(DeletePlayerFromRosterRequest) returns (DeletePlayerFromRosterResponse);
+  
+  // DeleteTeamRoster clears an entire team's roster
+  rpc DeleteTeamRoster(DeleteTeamRosterRequest) returns (DeleteTeamRosterResponse);
+}
+
+// CreateRosterRequest represents the data needed to add a player to a roster
+message CreateRosterRequest {
+  string fantasy_team_id = 1;
+  string player_id = 2;
+  RosterPosition position = 3;
+  AcquisitionType acquisition_type = 4;
+  google.protobuf.Struct keeper_data = 5;
+}
+
+message CreateRosterResponse {
+  Roster roster = 1;
+}
+
+// GetRoster messages
+message GetRosterRequest {
+  string id = 1;
+}
+
+message GetRosterResponse {
+  Roster roster = 1;
+}
+
+// GetRosterPlayersByFantasyTeam messages
+message GetRosterPlayersByFantasyTeamRequest {
+  string fantasy_team_id = 1;
+}
+
+message GetRosterPlayersByFantasyTeamResponse {
+  repeated Roster rosters = 1;
+}
+
+// GetRosterPlayersByFantasyTeamAndPosition messages
+message GetRosterPlayersByFantasyTeamAndPositionRequest {
+  string fantasy_team_id = 1;
+  RosterPosition position = 2;
+}
+
+message GetRosterPlayersByFantasyTeamAndPositionResponse {
+  repeated Roster rosters = 1;
+}
+
+// GetPlayerOnRoster messages
+message GetPlayerOnRosterRequest {
+  string fantasy_team_id = 1;
+  string player_id = 2;
+}
+
+message GetPlayerOnRosterResponse {
+  Roster roster = 1;
+}
+
+// GetStartingRosterPlayers messages
+message GetStartingRosterPlayersRequest {
+  string fantasy_team_id = 1;
+}
+
+message GetStartingRosterPlayersResponse {
+  repeated Roster rosters = 1;
+}
+
+// GetBenchRosterPlayers messages
+message GetBenchRosterPlayersRequest {
+  string fantasy_team_id = 1;
+}
+
+message GetBenchRosterPlayersResponse {
+  repeated Roster rosters = 1;
+}
+
+// GetRosterPlayersByAcquisitionType messages
+message GetRosterPlayersByAcquisitionTypeRequest {
+  string fantasy_team_id = 1;
+  AcquisitionType acquisition_type = 2;
+}
+
+message GetRosterPlayersByAcquisitionTypeResponse {
+  repeated Roster rosters = 1;
+}
+
+// UpdateRosterPlayerPosition messages
+message UpdateRosterPlayerPositionRequest {
+  string id = 1;
+  RosterPosition position = 2;
+}
+
+message UpdateRosterPlayerPositionResponse {
+  Roster roster = 1;
+}
+
+// UpdateRosterPlayerKeeperData messages
+message UpdateRosterPlayerKeeperDataRequest {
+  string id = 1;
+  google.protobuf.Struct keeper_data = 2;
+}
+
+message UpdateRosterPlayerKeeperDataResponse {
+  Roster roster = 1;
+}
+
+// UpdateRosterPositionAndKeeperData messages
+message UpdateRosterPositionAndKeeperDataRequest {
+  string id = 1;
+  RosterPosition position = 2;
+  google.protobuf.Struct keeper_data = 3;
+}
+
+message UpdateRosterPositionAndKeeperDataResponse {
+  Roster roster = 1;
+}
+
+// DeleteRosterEntry messages
+message DeleteRosterEntryRequest {
+  string id = 1;
+}
+
+message DeleteRosterEntryResponse {
+  bool success = 1;
+}
+
+// DeletePlayerFromRoster messages
+message DeletePlayerFromRosterRequest {
+  string fantasy_team_id = 1;
+  string player_id = 2;
+}
+
+message DeletePlayerFromRosterResponse {
+  bool success = 1;
+}
+
+// DeleteTeamRoster messages
+message DeleteTeamRosterRequest {
+  string fantasy_team_id = 1;
+}
+
+message DeleteTeamRosterResponse {
+  bool success = 1;
+}

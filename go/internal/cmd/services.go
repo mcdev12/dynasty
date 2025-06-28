@@ -4,12 +4,14 @@ import (
 	"database/sql"
 	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
 	"github.com/mcdev12/dynasty/go/internal/leagues"
+	"github.com/mcdev12/dynasty/go/internal/roster"
 	"github.com/mcdev12/dynasty/go/internal/users"
 
 	fantasyteamdb "github.com/mcdev12/dynasty/go/internal/fantasyteam/db"
 	leaguedb "github.com/mcdev12/dynasty/go/internal/leagues/db"
 	"github.com/mcdev12/dynasty/go/internal/player"
 	playerdb "github.com/mcdev12/dynasty/go/internal/player/db"
+	rosterdb "github.com/mcdev12/dynasty/go/internal/roster/db"
 	"github.com/mcdev12/dynasty/go/internal/sports/base"
 	"github.com/mcdev12/dynasty/go/internal/teams"
 	teamsdb "github.com/mcdev12/dynasty/go/internal/teams/db"
@@ -22,6 +24,7 @@ type Services struct {
 	Users       *users.Service
 	League      *leagues.Service
 	FantasyTeam *fantasyteam.Service
+	Roster      *roster.Service
 }
 
 func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Services {
@@ -58,11 +61,17 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	fantasyTeamApp := fantasyteam.NewApp(fantasyTeamRepo, userApp, leagueApp)
 	fantasyTeamService := fantasyteam.NewService(fantasyTeamApp)
 
+	rosterQueries := rosterdb.New(database)
+	rosterRepo := roster.NewRepository(rosterQueries)
+	rosterApp := roster.NewApp(rosterRepo, fantasyTeamRepo, playerRepo)
+	rosterService := roster.NewService(rosterApp)
+
 	return &Services{
 		Teams:       teamsService,
 		Players:     playerService,
 		Users:       userService,
 		League:      leagueService,
 		FantasyTeam: fantasyTeamService,
+		Roster:      rosterService,
 	}
 }

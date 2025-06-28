@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1/fantasyteamv1connect"
-	"github.com/mcdev12/dynasty/go/internal/genproto/league/v1/leaguev1connect"
-	"github.com/mcdev12/dynasty/go/internal/genproto/user/v1/userv1connect"
 	"log"
 	"net/http"
 
 	"connectrpc.com/grpcreflect"
+
+	"github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1/fantasyteamv1connect"
+	"github.com/mcdev12/dynasty/go/internal/genproto/league/v1/leaguev1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/player/v1/playerv1connect"
+	"github.com/mcdev12/dynasty/go/internal/genproto/roster/v1/rosterv1connect"
 	"github.com/mcdev12/dynasty/go/internal/genproto/team/v1/teamv1connect"
+	"github.com/mcdev12/dynasty/go/internal/genproto/user/v1/userv1connect"
 	"github.com/rs/cors"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -72,6 +74,10 @@ func registerServices(mux *http.ServeMux, services *Services) {
 	// Register fantasy team service
 	fantasyTeamServicePath, fantasyTeamServiceHandler := fantasyteamv1connect.NewFantasyTeamServiceHandler(services.FantasyTeam)
 	mux.Handle(fantasyTeamServicePath, fantasyTeamServiceHandler)
+
+	// Register roster service
+	rosterServicePath, rosterServiceHandler := rosterv1connect.NewRosterServiceHandler(services.Roster)
+	mux.Handle(rosterServicePath, rosterServiceHandler)
 }
 
 func setupReflection(mux *http.ServeMux) {
@@ -81,6 +87,7 @@ func setupReflection(mux *http.ServeMux) {
 		userv1connect.UserServiceName,
 		leaguev1connect.LeagueServiceName,
 		fantasyteamv1connect.FantasyTeamServiceName,
+		rosterv1connect.RosterServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))

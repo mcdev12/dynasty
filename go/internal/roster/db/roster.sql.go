@@ -332,43 +332,6 @@ func (q *Queries) GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uu
 	return items, nil
 }
 
-const transferPlayerToTeam = `-- name: TransferPlayerToTeam :one
-UPDATE roster SET
-    fantasy_team_id = $2,
-    acquired_at = NOW(),
-    acquisition_type = $3,
-    keeper_data = $4
-WHERE id = $1
-RETURNING id, fantasy_team_id, player_id, position, acquired_at, acquisition_type, keeper_data
-`
-
-type TransferPlayerToTeamParams struct {
-	ID              uuid.UUID             `json:"id"`
-	FantasyTeamID   uuid.UUID             `json:"fantasy_team_id"`
-	AcquisitionType AcquisitionTypeEnum   `json:"acquisition_type"`
-	KeeperData      pqtype.NullRawMessage `json:"keeper_data"`
-}
-
-func (q *Queries) TransferPlayerToTeam(ctx context.Context, arg TransferPlayerToTeamParams) (Roster, error) {
-	row := q.db.QueryRowContext(ctx, transferPlayerToTeam,
-		arg.ID,
-		arg.FantasyTeamID,
-		arg.AcquisitionType,
-		arg.KeeperData,
-	)
-	var i Roster
-	err := row.Scan(
-		&i.ID,
-		&i.FantasyTeamID,
-		&i.PlayerID,
-		&i.Position,
-		&i.AcquiredAt,
-		&i.AcquisitionType,
-		&i.KeeperData,
-	)
-	return i, err
-}
-
 const updateRosterPlayerKeeperData = `-- name: UpdateRosterPlayerKeeperData :one
 UPDATE roster SET
     keeper_data = $2
