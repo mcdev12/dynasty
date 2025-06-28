@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS draft_picks;
+DROP TABLE IF EXISTS draft;
