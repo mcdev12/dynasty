@@ -12,20 +12,13 @@ import (
 	"github.com/mcdev12/dynasty/go/internal/models"
 )
 
-type Querier interface {
-	CreateDraft(ctx context.Context, arg db.CreateDraftParams) (db.Draft, error)
-	GetDraft(ctx context.Context, id uuid.UUID) (db.Draft, error)
-	UpdateDraftStatus(ctx context.Context, arg db.UpdateDraftStatusParams) (db.Draft, error)
-	DeleteDraft(ctx context.Context, id uuid.UUID) error
-}
-
 type Repository struct {
-	queries Querier
+	queries *db.Queries
 }
 
-func NewRepository(querier Querier) *Repository {
+func NewRepository(queries *db.Queries) *Repository {
 	return &Repository{
-		queries: querier,
+		queries: queries,
 	}
 }
 
@@ -92,6 +85,67 @@ func (r *Repository) UpdateDraftStatus(ctx context.Context, id uuid.UUID, req Up
 func (r *Repository) DeleteDraft(ctx context.Context, id uuid.UUID) error {
 	if err := r.queries.DeleteDraft(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete draft: %w", err)
+	}
+	return nil
+}
+
+type NextDeadline struct {
+	DraftID  uuid.UUID  `json:"draft_id"`
+	Deadline *time.Time `json:"deadline"`
+}
+
+func (r *Repository) FetchNextDeadline(ctx context.Context) (*NextDeadline, error) {
+	row, err := r.queries.FetchNextDeadline(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch next deadline: %w", err)
+	}
+
+	var dt *time.Time
+	if row.NextDeadline.Valid {
+		t := row.NextDeadline.Time
+		dt = &t
+	}
+
+	return &NextDeadline{
+		DraftID:  row.DraftID,
+		Deadline: dt,
+	}, nil
+}
+
+func (r *Repository) FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error) {
+	rows, err := r.queries.FetchDraftsDueForPick(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch due deadlines: %w", err)
+	}
+
+	return rows, nil
+}
+
+func (r *Repository) UpdateNextDeadline(ctx context.Context, draftID uuid.UUID, deadline *time.Time) error {
+	var nd sql.NullTime
+	if deadline != nil {
+		nd = sql.NullTime{
+			Time:  *deadline,
+			Valid: true,
+		}
+	} else {
+		nd = sql.NullTime{
+			Valid: false,
+		}
+	}
+	err := r.queries.UpdateNextDeadline(ctx, db.UpdateNextDeadlineParams{
+		ID:           draftID,
+		NextDeadline: nd,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update next deadline: %w", err)
+	}
+	return nil
+}
+
+func (r *Repository) ClearNextDeadline(ctx context.Context, id uuid.UUID) error {
+	if err := r.queries.ClearNextDeadline(ctx, id); err != nil {
+		return fmt.Errorf("failed to clear next deadline: %w", err)
 	}
 	return nil
 }

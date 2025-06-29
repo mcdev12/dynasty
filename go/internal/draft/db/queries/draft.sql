@@ -39,3 +39,37 @@ RETURNING *;
 DELETE FROM draft
 WHERE id = $1
   AND status = 'NOT_STARTED';
+
+
+-- name: FetchNextDeadline :one
+-- Fetch the single soonest deadline across all in-progress drafts.
+SELECT
+    id      AS draft_id,
+    next_deadline
+FROM draft
+WHERE status = 'IN_PROGRESS'
+ORDER BY next_deadline
+LIMIT 1;
+
+-- name: FetchDraftsDueForPick :many
+-- Claim up to $1 drafts whose deadline has passed, locking them to avoid races.
+SELECT
+    id AS draft_id
+FROM draft
+WHERE status = 'IN_PROGRESS'
+  AND next_deadline <= NOW()
+ORDER BY next_deadline
+LIMIT $1
+    FOR UPDATE SKIP LOCKED;
+
+-- name: UpdateNextDeadline :exec
+-- Set the next pick deadline for a draft (e.g. after a pick or resume).
+UPDATE draft
+SET next_deadline = $2
+WHERE id = $1;
+
+-- name: ClearNextDeadline :exec
+-- Clear the deadline (e.g. when pausing or completing a draft).
+UPDATE draft
+SET next_deadline = NULL
+WHERE id = $1;

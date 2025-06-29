@@ -280,16 +280,17 @@ func (ns NullRosterPositionEnum) Value() (driver.Value, error) {
 }
 
 type Draft struct {
-	ID          uuid.UUID       `json:"id"`
-	LeagueID    uuid.UUID       `json:"league_id"`
-	DraftType   DraftType       `json:"draft_type"`
-	Status      DraftStatus     `json:"status"`
-	Settings    json.RawMessage `json:"settings"`
-	ScheduledAt sql.NullTime    `json:"scheduled_at"`
-	StartedAt   sql.NullTime    `json:"started_at"`
-	CompletedAt sql.NullTime    `json:"completed_at"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID           uuid.UUID       `json:"id"`
+	LeagueID     uuid.UUID       `json:"league_id"`
+	DraftType    DraftType       `json:"draft_type"`
+	Status       DraftStatus     `json:"status"`
+	Settings     json.RawMessage `json:"settings"`
+	ScheduledAt  sql.NullTime    `json:"scheduled_at"`
+	StartedAt    sql.NullTime    `json:"started_at"`
+	CompletedAt  sql.NullTime    `json:"completed_at"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+	NextDeadline sql.NullTime    `json:"next_deadline"`
 }
 
 type DraftOutbox struct {

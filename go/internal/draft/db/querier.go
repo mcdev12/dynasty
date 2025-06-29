@@ -11,11 +11,17 @@ import (
 )
 
 type Querier interface {
+	// Clear the deadline (e.g. when pausing or completing a draft).
+	ClearNextDeadline(ctx context.Context, id uuid.UUID) error
 	CreateDraft(ctx context.Context, arg CreateDraftParams) (Draft, error)
 	CreateDraftPick(ctx context.Context, arg CreateDraftPickParams) (DraftPick, error)
 	CreateDraftPickBatch(ctx context.Context, arg CreateDraftPickBatchParams) error
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 	DeleteDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) error
+	// Claim up to $1 drafts whose deadline has passed, locking them to avoid races.
+	FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error)
+	// Fetch the single soonest deadline across all in-progress drafts.
+	FetchNextDeadline(ctx context.Context) (FetchNextDeadlineRow, error)
 	FetchOutboxByID(ctx context.Context, id uuid.UUID) (FetchOutboxByIDRow, error)
 	FetchUnsentOutbox(ctx context.Context, limit int32) ([]FetchUnsentOutboxRow, error)
 	GetDraft(ctx context.Context, id uuid.UUID) (Draft, error)
@@ -28,6 +34,8 @@ type Querier interface {
 	MarkOutboxSent(ctx context.Context, id uuid.UUID) error
 	UpdateDraftPickPlayer(ctx context.Context, arg UpdateDraftPickPlayerParams) (DraftPick, error)
 	UpdateDraftStatus(ctx context.Context, arg UpdateDraftStatusParams) (Draft, error)
+	// Set the next pick deadline for a draft (e.g. after a pick or resume).
+	UpdateNextDeadline(ctx context.Context, arg UpdateNextDeadlineParams) error
 }
 
 var _ Querier = (*Queries)(nil)

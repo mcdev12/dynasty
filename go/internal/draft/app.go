@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mcdev12/dynasty/go/internal/models"
@@ -16,6 +17,10 @@ type DraftRepository interface {
 	GetDraft(ctx context.Context, id uuid.UUID) (*models.Draft, error)
 	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error)
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
+	FetchNextDeadline(ctx context.Context) (*repository.NextDeadline, error)
+	FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error)
+	UpdateNextDeadline(ctx context.Context, draftID uuid.UUID, deadline *time.Time) error
+	ClearNextDeadline(ctx context.Context, id uuid.UUID) error
 }
 
 // DraftPickRepositoryImpl defines what the app layer needs from the draft pick repository
@@ -38,6 +43,7 @@ type App struct {
 }
 
 // NewApp creates a new draft App
+// TODO use zerolog
 func NewApp(repo DraftRepository, pickRepo DraftPickRepositoryImpl, leaguesRepo LeaguesRepository) *App {
 	return &App{
 		repo:        repo,
@@ -316,6 +322,7 @@ func (a *App) validateDraftStatus(status models.DraftStatus) error {
 	}
 }
 
+// TODO move to formal FSM
 // validateStatusTransition validates if a status transition is allowed
 func (a *App) validateStatusTransition(currentStatus, newStatus models.DraftStatus) error {
 	// Allow same status (no-op)
@@ -384,5 +391,72 @@ func (a *App) validateDraftSettings(draftType models.DraftType, settings models.
 		}
 	}
 
+	return nil
+}
+
+// FetchNextDeadline retrieves the next draft deadline across all active drafts
+func (a *App) FetchNextDeadline(ctx context.Context) (*repository.NextDeadline, error) {
+	deadline, err := a.repo.FetchNextDeadline(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch next deadline: %w", err)
+	}
+	return deadline, nil
+}
+
+// FetchDraftsDueForPick retrieves drafts that have exceeded their pick deadline
+func (a *App) FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be greater than 0")
+	}
+
+	draftIDs, err := a.repo.FetchDraftsDueForPick(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch drafts due for pick: %w", err)
+	}
+
+	return draftIDs, nil
+}
+
+// UpdateNextDeadline updates the deadline for when the next pick should be made
+func (a *App) UpdateNextDeadline(ctx context.Context, draftID uuid.UUID, deadline *time.Time) error {
+	// Verify draft exists and is in progress
+	draft, err := a.repo.GetDraft(ctx, draftID)
+	if err != nil {
+		return fmt.Errorf("draft not found: %w", err)
+	}
+
+	// Only allow deadline updates for drafts in progress
+	if draft.Status != models.DraftStatusInProgress {
+		return fmt.Errorf("can only update deadline for drafts with status %s, current status is %s",
+			models.DraftStatusInProgress, draft.Status)
+	}
+
+	if err := a.repo.UpdateNextDeadline(ctx, draftID, deadline); err != nil {
+		return fmt.Errorf("failed to update next deadline: %w", err)
+	}
+
+	return nil
+}
+
+// ClearNextDeadline removes the deadline for a draft (used when pausing or completing)
+func (a *App) ClearNextDeadline(ctx context.Context, draftID uuid.UUID) error {
+	// Verify draft exists
+	draft, err := a.repo.GetDraft(ctx, draftID)
+	if err != nil {
+		return fmt.Errorf("draft not found: %w", err)
+	}
+
+	// Only clear deadline for paused, completed, or cancelled drafts
+	switch draft.Status {
+	case models.DraftStatusPaused, models.DraftStatusCompleted, models.DraftStatusCancelled:
+		// Valid states for clearing deadline
+	default:
+		return fmt.Errorf("can only clear deadline for drafts with status PAUSED, COMPLETED, or CANCELLED, current status is %s",
+			draft.Status)
+	}
+
+	if err := a.repo.ClearNextDeadline(ctx, draftID); err != nil {
+		return fmt.Errorf("failed to clear next deadline: %w", err)
+	}
 	return nil
 }

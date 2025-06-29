@@ -13,6 +13,18 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearNextDeadline = `-- name: ClearNextDeadline :exec
+UPDATE draft
+SET next_deadline = NULL
+WHERE id = $1
+`
+
+// Clear the deadline (e.g. when pausing or completing a draft).
+func (q *Queries) ClearNextDeadline(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, clearNextDeadline, id)
+	return err
+}
+
 const createDraft = `-- name: CreateDraft :one
 INSERT INTO draft (
     id,
@@ -33,7 +45,7 @@ INSERT INTO draft (
              NOW(),
              NOW()
          )
-RETURNING id, league_id, draft_type, status, settings, scheduled_at, started_at, completed_at, created_at, updated_at
+RETURNING id, league_id, draft_type, status, settings, scheduled_at, started_at, completed_at, created_at, updated_at, next_deadline
 `
 
 type CreateDraftParams struct {
@@ -66,6 +78,7 @@ func (q *Queries) CreateDraft(ctx context.Context, arg CreateDraftParams) (Draft
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextDeadline,
 	)
 	return i, err
 }
@@ -81,8 +94,66 @@ func (q *Queries) DeleteDraft(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const fetchDraftsDueForPick = `-- name: FetchDraftsDueForPick :many
+SELECT
+    id AS draft_id
+FROM draft
+WHERE status = 'IN_PROGRESS'
+  AND next_deadline <= NOW()
+ORDER BY next_deadline
+LIMIT $1
+    FOR UPDATE SKIP LOCKED
+`
+
+// Claim up to $1 drafts whose deadline has passed, locking them to avoid races.
+func (q *Queries) FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, fetchDraftsDueForPick, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var draft_id uuid.UUID
+		if err := rows.Scan(&draft_id); err != nil {
+			return nil, err
+		}
+		items = append(items, draft_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const fetchNextDeadline = `-- name: FetchNextDeadline :one
+SELECT
+    id      AS draft_id,
+    next_deadline
+FROM draft
+WHERE status = 'IN_PROGRESS'
+ORDER BY next_deadline
+LIMIT 1
+`
+
+type FetchNextDeadlineRow struct {
+	DraftID      uuid.UUID    `json:"draft_id"`
+	NextDeadline sql.NullTime `json:"next_deadline"`
+}
+
+// Fetch the single soonest deadline across all in-progress drafts.
+func (q *Queries) FetchNextDeadline(ctx context.Context) (FetchNextDeadlineRow, error) {
+	row := q.db.QueryRowContext(ctx, fetchNextDeadline)
+	var i FetchNextDeadlineRow
+	err := row.Scan(&i.DraftID, &i.NextDeadline)
+	return i, err
+}
+
 const getDraft = `-- name: GetDraft :one
-SELECT id, league_id, draft_type, status, settings, scheduled_at, started_at, completed_at, created_at, updated_at
+SELECT id, league_id, draft_type, status, settings, scheduled_at, started_at, completed_at, created_at, updated_at, next_deadline
 FROM draft
 WHERE id = $1
 `
@@ -101,6 +172,7 @@ func (q *Queries) GetDraft(ctx context.Context, id uuid.UUID) (Draft, error) {
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextDeadline,
 	)
 	return i, err
 }
@@ -113,7 +185,7 @@ SET
     completed_at = CASE WHEN $2::text = 'COMPLETED' THEN NOW() ELSE completed_at END,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, league_id, draft_type, status, settings, scheduled_at, started_at, completed_at, created_at, updated_at
+RETURNING id, league_id, draft_type, status, settings, scheduled_at, started_at, completed_at, created_at, updated_at, next_deadline
 `
 
 type UpdateDraftStatusParams struct {
@@ -135,6 +207,24 @@ func (q *Queries) UpdateDraftStatus(ctx context.Context, arg UpdateDraftStatusPa
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextDeadline,
 	)
 	return i, err
+}
+
+const updateNextDeadline = `-- name: UpdateNextDeadline :exec
+UPDATE draft
+SET next_deadline = $2
+WHERE id = $1
+`
+
+type UpdateNextDeadlineParams struct {
+	ID           uuid.UUID    `json:"id"`
+	NextDeadline sql.NullTime `json:"next_deadline"`
+}
+
+// Set the next pick deadline for a draft (e.g. after a pick or resume).
+func (q *Queries) UpdateNextDeadline(ctx context.Context, arg UpdateNextDeadlineParams) error {
+	_, err := q.db.ExecContext(ctx, updateNextDeadline, arg.ID, arg.NextDeadline)
+	return err
 }
