@@ -19,6 +19,7 @@ type DraftApp interface {
 	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error)
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 	PrepopulateDraftPicks(ctx context.Context, draftID uuid.UUID) error
+	MakePick(ctx context.Context, req repository.MakePickRequest) error
 }
 
 // Service implements the DraftService gRPC interface
@@ -139,6 +140,20 @@ func (s *Service) DeleteDraft(ctx context.Context, req *connect.Request[draftv1.
 	return connect.NewResponse(&draftv1.DeleteDraftResponse{}), nil
 }
 
+func (s *Service) MakePick(ctx context.Context, req *connect.Request[draftv1.MakePickRequest]) (*connect.Response[draftv1.MakePickResponse], error) {
+	appReq, err := s.protoToMakePickRequest(req.Msg)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	err = s.app.MakePick(ctx, appReq)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	return connect.NewResponse(&draftv1.MakePickResponse{}), nil
+}
+
 // Conversion methods between proto and app layer models
 
 func (s *Service) draftToProto(draft *models.Draft) (*draftv1.Draft, error) {
@@ -182,6 +197,37 @@ func (s *Service) protoToCreateDraftRequest(proto *draftv1.CreateDraftRequest) (
 	if proto.ScheduledAt != nil {
 		scheduledAt := proto.ScheduledAt.AsTime()
 		req.ScheduledAt = &scheduledAt
+	}
+
+	return req, nil
+}
+
+func (s *Service) protoToMakePickRequest(proto *draftv1.MakePickRequest) (repository.MakePickRequest, error) {
+	pickId, err := uuid.Parse(proto.PickId)
+	if err != nil {
+		return repository.MakePickRequest{}, err
+	}
+	draftId, err := uuid.Parse(proto.DraftId)
+	if err != nil {
+		return repository.MakePickRequest{}, err
+	}
+
+	teamId, err := uuid.Parse(proto.TeamId)
+	if err != nil {
+		return repository.MakePickRequest{}, err
+	}
+
+	playerId, err := uuid.Parse(proto.PlayerId)
+	if err != nil {
+		return repository.MakePickRequest{}, err
+	}
+
+	req := repository.MakePickRequest{
+		PickID:      pickId,
+		DraftID:     draftId,
+		TeamID:      teamId,
+		PlayerID:    playerId,
+		OverallPick: int(proto.OverallPick),
 	}
 
 	return req, nil

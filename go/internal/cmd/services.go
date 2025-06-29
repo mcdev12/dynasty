@@ -74,7 +74,7 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	// Draft Service
 	draftQueries := draftdb.New(database)
 	draftRepo := repository.NewRepository(draftQueries)
-	draftPickRepo := repository.NewDraftPickRepository(draftQueries)
+	draftPickRepo := repository.NewDraftPickRepository(draftQueries, database)
 	draftApp := draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
 	draftService := draft.NewService(draftApp)
 

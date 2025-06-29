@@ -44,6 +44,14 @@ type UpdateDraftPickPlayerRequest struct {
 	KeeperPick    bool      `json:"keeper_pick"`
 }
 
+type MakePickRequest struct {
+	PickID      uuid.UUID `json:"pick_id"`
+	PlayerID    uuid.UUID `json:"player_id"`
+	DraftID     uuid.UUID `json:"draft_id"`
+	TeamID      uuid.UUID `json:"team_id"`
+	OverallPick int       `json:"overall_pick"`
+}
+
 func (dp *DraftPickRepository) CreateDraftPick(ctx context.Context, req CreateDraftPickRequest) (*models.DraftPick, error) {
 	var playerID uuid.NullUUID
 	if req.PlayerID != nil {
@@ -184,7 +192,7 @@ func (r *DraftPickRepository) DeleteDraftPicksByDraft(ctx context.Context, draft
 
 // MakePick creates a txn and does a dual write to the draft pick table and the outbox.
 // The outbox is then responsible for emitting events to our worker.
-func (dp *DraftPickRepository) MakePick(ctx context.Context, pickID, playerID, draftID, teamID uuid.UUID, overall int32) error {
+func (dp *DraftPickRepository) MakePick(ctx context.Context, pickRequest MakePickRequest) error {
 
 	txn, err := dp.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -201,8 +209,8 @@ func (dp *DraftPickRepository) MakePick(ctx context.Context, pickID, playerID, d
 
 	// Update draft pick
 	rows, err := tctx.MakePick(ctx, db.MakePickParams{
-		ID:       pickID,
-		PlayerID: uuid.NullUUID{UUID: playerID, Valid: true},
+		ID:       pickRequest.PickID,
+		PlayerID: uuid.NullUUID{UUID: pickRequest.PlayerID, Valid: true},
 	})
 	if err != nil {
 		return fmt.Errorf("update pick: %w", err)
@@ -215,13 +223,14 @@ func (dp *DraftPickRepository) MakePick(ctx context.Context, pickID, playerID, d
 	payload, err := json.Marshal(struct {
 		PickID, PlayerID, TeamID uuid.UUID
 		Overall                  int32
-	}{pickID, playerID, teamID, overall})
+	}{pickRequest.PickID, pickRequest.PlayerID, pickRequest.TeamID, int32(pickRequest.OverallPick)})
 	if err != nil {
 		return fmt.Errorf("marshal pick: %w", err)
 	}
 
 	err = tctx.InsertOutboxPickMade(ctx, db.InsertOutboxPickMadeParams{
-		DraftID: draftID,
+		ID:      uuid.New(),
+		DraftID: pickRequest.DraftID,
 		Payload: payload,
 	})
 	if err != nil {

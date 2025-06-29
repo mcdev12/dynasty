@@ -5,48 +5,137 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
+
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-// MockPublisher is a simple in-memory publisher for development/testing
-type MockPublisher struct {
+type JetStreamConfig struct {
+	URL             string
+	StreamName      string
+	SubjectPrefix   string
+	MaxReconnects   int
+	ReconnectWait   time.Duration
+	MaxAge          time.Duration // How long to keep messages
+	MaxMsgs         int64         // Max number of messages to keep
+	Replicas        int           // Number of replicas for the stream
+	DuplicateWindow time.Duration // Window for duplicate detection
+}
+
+func DefaultJetStreamConfig() JetStreamConfig {
+	return JetStreamConfig{
+		URL:             nats.DefaultURL,
+		StreamName:      "DRAFT_EVENTS",
+		SubjectPrefix:   "draft.events",
+		MaxReconnects:   -1, // Infinite
+		ReconnectWait:   2 * time.Second,
+		MaxAge:          7 * 24 * time.Hour, // 7 days
+		MaxMsgs:         -1,                 // No limit
+		Replicas:        1,
+		DuplicateWindow: 2 * time.Hour,
+	}
+}
+
+type JetStreamPublisher struct {
+	nc     *nats.Conn
+	js     jetstream.JetStream
+	config JetStreamConfig
 	logger *slog.Logger
 }
 
-func NewMockPublisher(logger *slog.Logger) *MockPublisher {
-	return &MockPublisher{logger: logger}
+func NewJetStreamPublisher(config JetStreamConfig, logger *slog.Logger) (*JetStreamPublisher, error) {
+	opts := []nats.Option{
+		nats.MaxReconnects(config.MaxReconnects),
+		nats.ReconnectWait(config.ReconnectWait),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			logger.Error("NATS disconnected", slog.String("error", err.Error()))
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			logger.Info("NATS reconnected", slog.String("url", nc.ConnectedUrl()))
+		}),
+		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
+			logger.Error("NATS error", slog.String("error", err.Error()))
+		}),
+	}
+
+	nc, err := nats.Connect(config.URL, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
+	}
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
+	}
+
+	p := &JetStreamPublisher{
+		nc:     nc,
+		js:     js,
+		config: config,
+		logger: logger,
+	}
+
+	// Create or update the stream
+	if err := p.ensureStream(context.Background()); err != nil {
+		nc.Close()
+		return nil, fmt.Errorf("failed to ensure stream: %w", err)
+	}
+
+	return p, nil
 }
 
-func (p *MockPublisher) Publish(ctx context.Context, event OutboxEvent) error {
-	p.logger.Info("publishing event",
-		slog.String("event_id", event.ID.String()),
-		slog.String("event_type", event.EventType),
-		slog.String("draft_id", event.DraftID.String()))
+func (p *JetStreamPublisher) ensureStream(ctx context.Context) error {
+	streamConfig := jetstream.StreamConfig{
+		Name:        p.config.StreamName,
+		Description: "Draft event stream for outbox pattern",
+		Subjects:    []string{fmt.Sprintf("%s.>", p.config.SubjectPrefix)},
+		Retention:   jetstream.LimitsPolicy,
+		MaxAge:      p.config.MaxAge,
+		MaxMsgs:     p.config.MaxMsgs,
+		Storage:     jetstream.FileStorage,
+		Replicas:    p.config.Replicas,
+		Duplicates:  p.config.DuplicateWindow,
+	}
+
+	stream, err := p.js.Stream(ctx, p.config.StreamName)
+	if err != nil {
+		// Stream doesn't exist, create it
+		_, err = p.js.CreateStream(ctx, streamConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create stream: %w", err)
+		}
+		p.logger.Info("created JetStream stream", slog.String("name", p.config.StreamName))
+	} else {
+		// Stream exists, update it
+		info, err := stream.Info(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get stream info: %w", err)
+		}
+
+		// Only update if configuration has changed
+		if !isStreamConfigEqual(info.Config, streamConfig) {
+			_, err = p.js.UpdateStream(ctx, streamConfig)
+			if err != nil {
+				return fmt.Errorf("failed to update stream: %w", err)
+			}
+			p.logger.Info("updated JetStream stream", slog.String("name", p.config.StreamName))
+		}
+	}
+
 	return nil
 }
 
-// KafkaPublisher publishes events to Apache Kafka
-type KafkaPublisher struct {
-	// TODO: Add Kafka producer client
-	topicPrefix string
-	logger      *slog.Logger
-}
+func (p *JetStreamPublisher) Publish(ctx context.Context, event OutboxEvent) error {
+	subject := fmt.Sprintf("%s.%s", p.config.SubjectPrefix, event.EventType)
 
-func NewKafkaPublisher(topicPrefix string, logger *slog.Logger) *KafkaPublisher {
-	return &KafkaPublisher{
-		topicPrefix: topicPrefix,
-		logger:      logger,
-	}
-}
-
-func (p *KafkaPublisher) Publish(ctx context.Context, event OutboxEvent) error {
-	topic := fmt.Sprintf("%s.draft.%s", p.topicPrefix, event.EventType)
-	
-	// Create the message envelope
+	// Create message envelope
 	envelope := map[string]interface{}{
 		"eventId":   event.ID.String(),
 		"eventType": event.EventType,
 		"draftId":   event.DraftID.String(),
-		"timestamp": event.CreatedAt,
+		"timestamp": time.Now().UTC(),
 		"payload":   json.RawMessage(event.Payload),
 	}
 
@@ -55,109 +144,48 @@ func (p *KafkaPublisher) Publish(ctx context.Context, event OutboxEvent) error {
 		return fmt.Errorf("failed to marshal event: %w", err)
 	}
 
-	// TODO: Implement actual Kafka publishing
-	// producer.Produce(&kafka.Message{
-	//     TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-	//     Key:            []byte(event.DraftID.String()),
-	//     Value:          messageBytes,
-	// }, nil)
-
-	p.logger.Debug("would publish to Kafka",
-		slog.String("topic", topic),
-		slog.String("key", event.DraftID.String()),
-		slog.Int("size", len(messageBytes)))
-
-	return nil
-}
-
-// NATSPublisher publishes events to NATS/NATS Streaming
-type NATSPublisher struct {
-	// TODO: Add NATS connection
-	subject string
-	logger  *slog.Logger
-}
-
-func NewNATSPublisher(subject string, logger *slog.Logger) *NATSPublisher {
-	return &NATSPublisher{
-		subject: subject,
-		logger:  logger,
-	}
-}
-
-func (p *NATSPublisher) Publish(ctx context.Context, event OutboxEvent) error {
-	subject := fmt.Sprintf("%s.draft.%s", p.subject, event.EventType)
-
-	// Create the message envelope
-	envelope := map[string]interface{}{
-		"eventId":   event.ID.String(),
-		"eventType": event.EventType,
-		"draftId":   event.DraftID.String(),
-		"timestamp": event.CreatedAt,
-		"payload":   json.RawMessage(event.Payload),
+	// Publish with message ID for deduplication
+	pubOpts := []jetstream.PublishOpt{
+		jetstream.WithMsgID(event.ID.String()),
+		jetstream.WithExpectStream(p.config.StreamName),
 	}
 
-	messageBytes, err := json.Marshal(envelope)
+	ack, err := p.js.PublishMsg(ctx, &nats.Msg{
+		Subject: subject,
+		Data:    messageBytes,
+		Header: nats.Header{
+			"Event-Type": []string{event.EventType},
+			"Draft-ID":   []string{event.DraftID.String()},
+			"Event-ID":   []string{event.ID.String()},
+		},
+	}, pubOpts...)
+
 	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
+		return fmt.Errorf("failed to publish to JetStream: %w", err)
 	}
 
-	// TODO: Implement actual NATS publishing
-	// nc.Publish(subject, messageBytes)
-
-	p.logger.Debug("would publish to NATS",
+	p.logger.Debug("published to JetStream",
 		slog.String("subject", subject),
-		slog.Int("size", len(messageBytes)))
+		slog.String("event_id", event.ID.String()),
+		slog.Uint64("sequence", ack.Sequence),
+		slog.String("stream", ack.Stream))
 
 	return nil
 }
 
-// RabbitMQPublisher publishes events to RabbitMQ
-type RabbitMQPublisher struct {
-	// TODO: Add RabbitMQ channel
-	exchange string
-	logger   *slog.Logger
-}
-
-func NewRabbitMQPublisher(exchange string, logger *slog.Logger) *RabbitMQPublisher {
-	return &RabbitMQPublisher{
-		exchange: exchange,
-		logger:   logger,
+func (p *JetStreamPublisher) Close() error {
+	if p != nil && p.nc != nil {
+		p.nc.Close()
 	}
-}
-
-func (p *RabbitMQPublisher) Publish(ctx context.Context, event OutboxEvent) error {
-	routingKey := fmt.Sprintf("draft.%s", event.EventType)
-
-	// Create the message envelope
-	envelope := map[string]interface{}{
-		"eventId":   event.ID.String(),
-		"eventType": event.EventType,
-		"draftId":   event.DraftID.String(),
-		"timestamp": event.CreatedAt,
-		"payload":   json.RawMessage(event.Payload),
-	}
-
-	messageBytes, err := json.Marshal(envelope)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event: %w", err)
-	}
-
-	// TODO: Implement actual RabbitMQ publishing
-	// ch.Publish(
-	//     p.exchange,
-	//     routingKey,
-	//     false,
-	//     false,
-	//     amqp.Publishing{
-	//         ContentType: "application/json",
-	//         Body:        messageBytes,
-	//     },
-	// )
-
-	p.logger.Debug("would publish to RabbitMQ",
-		slog.String("exchange", p.exchange),
-		slog.String("routing_key", routingKey),
-		slog.Int("size", len(messageBytes)))
-
 	return nil
+}
+
+// Helper function to compare stream configurations
+func isStreamConfigEqual(a, b jetstream.StreamConfig) bool {
+	// Compare relevant fields
+	return a.Name == b.Name &&
+		a.MaxAge == b.MaxAge &&
+		a.MaxMsgs == b.MaxMsgs &&
+		a.Replicas == b.Replicas &&
+		a.Duplicates == b.Duplicates
 }

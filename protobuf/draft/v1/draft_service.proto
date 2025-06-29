@@ -15,6 +15,9 @@ service DraftService {
   rpc ListDraftsForLeague(ListDraftsForLeagueRequest) returns (ListDraftsForLeagueResponse);
   rpc UpdateDraft(UpdateDraftRequest) returns (UpdateDraftResponse);
   rpc DeleteDraft(DeleteDraftRequest) returns (DeleteDraftResponse);
+
+  // Picks
+  rpc MakePick(MakePickRequest) returns (MakePickResponse);
 }
 
 // Requests and responses:
@@ -63,4 +66,16 @@ message DeleteDraftRequest {
 }
 
 message DeleteDraftResponse {}
+
+
+message MakePickRequest {
+  string pick_id = 1;
+  string draft_id = 2;
+  string team_id = 3;
+  string player_id = 4;
+  int32 overall_pick = 5;
+}
+
+message MakePickResponse {
+}
 

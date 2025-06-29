@@ -22,7 +22,7 @@ type DraftRepository interface {
 type DraftPickRepositoryImpl interface {
 	CreateDraftPicksBatch(ctx context.Context, picks []models.DraftPick) error
 	GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]models.DraftPick, error)
-	DeleteDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) error
+	MakePick(ctx context.Context, pickRequest repository.MakePickRequest) error
 }
 
 // LeaguesRepository defines what the app layer needs from the leagues repository for validation
@@ -108,6 +108,7 @@ func (a *App) UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repositor
 }
 
 // DeleteDraft deletes a draft by ID (only allowed for NOT_STARTED drafts)
+// TODO when would you ever want to do this lol
 func (a *App) DeleteDraft(ctx context.Context, id uuid.UUID) error {
 	// Verify draft exists and check status
 	draft, err := a.repo.GetDraft(ctx, id)
@@ -253,6 +254,20 @@ func (a *App) generateAuctionDraftPicks(draftID uuid.UUID, rounds int, draftOrde
 	}
 
 	return picks
+}
+
+func (a *App) MakePick(ctx context.Context, req repository.MakePickRequest) error {
+	// Verify draft exists and check status
+	_, err := a.repo.GetDraft(ctx, req.DraftID)
+	if err != nil {
+		return fmt.Errorf("draft not found: %w", err)
+	}
+
+	err = a.pickRepo.MakePick(ctx, req)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // validateCreateDraftRequest validates create draft request

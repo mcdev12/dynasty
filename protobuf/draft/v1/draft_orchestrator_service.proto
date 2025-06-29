@@ -10,7 +10,6 @@ option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/draft/v1;dr
 service DraftOrchestratorService {
   // Orchestration
   rpc StartDraft(StartDraftRequest) returns (StartDraftResponse);
-  rpc MakePick(MakePickRequest) returns (MakePickResponse);
   rpc PauseDraft(PauseDraftRequest) returns (PauseDraftResponse);
   rpc ResumeDraft(ResumeDraftRequest) returns (ResumeDraftResponse);
   rpc GetDraftStatus(GetDraftStatusRequest) returns (GetDraftStatusResponse);
@@ -27,16 +26,6 @@ message StartDraftRequest {
 
 message StartDraftResponse {
   Draft draft = 1;
-}
-
-message MakePickRequest {
-  string draft_id = 1;
-  string team_id = 2;
-  string player_id = 3;
-}
-
-message MakePickResponse {
-  DraftPick pick = 1;
 }
 
 message PauseDraftRequest {
