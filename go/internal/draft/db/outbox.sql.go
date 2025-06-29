@@ -10,15 +10,45 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
+
+const fetchOutboxByID = `-- name: FetchOutboxByID :one
+SELECT
+    id,
+    draft_id,
+    event_type,
+    payload
+FROM draft_outbox
+WHERE id = $1
+  AND sent_at IS NULL
+    FOR UPDATE SKIP LOCKED
+`
+
+type FetchOutboxByIDRow struct {
+	ID        uuid.UUID       `json:"id"`
+	DraftID   uuid.UUID       `json:"draft_id"`
+	EventType string          `json:"event_type"`
+	Payload   json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) FetchOutboxByID(ctx context.Context, id uuid.UUID) (FetchOutboxByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, fetchOutboxByID, id)
+	var i FetchOutboxByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.DraftID,
+		&i.EventType,
+		&i.Payload,
+	)
+	return i, err
+}
 
 const fetchUnsentOutbox = `-- name: FetchUnsentOutbox :many
 SELECT id, draft_id, event_type, payload
 FROM draft_outbox
 WHERE sent_at IS NULL
 ORDER BY created_at
-LIMIT  $1
+LIMIT $1
     FOR UPDATE SKIP LOCKED
 `
 
@@ -76,10 +106,10 @@ func (q *Queries) InsertOutboxPickMade(ctx context.Context, arg InsertOutboxPick
 const markOutboxSent = `-- name: MarkOutboxSent :exec
 UPDATE draft_outbox
 SET sent_at = NOW()
-WHERE id = ANY($1::uuid[])
+WHERE id = $1
 `
 
-func (q *Queries) MarkOutboxSent(ctx context.Context, ids []uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, markOutboxSent, pq.Array(ids))
+func (q *Queries) MarkOutboxSent(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, markOutboxSent, id)
 	return err
 }

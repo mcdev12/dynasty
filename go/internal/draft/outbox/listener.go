@@ -4,339 +4,166 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
-	"sync"
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	"github.com/mcdev12/dynasty/go/internal/draft/db"
+	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
+	"github.com/rs/zerolog/log"
+	"time"
 )
 
-type RealtimeConfig struct {
-	NotifyChannel    string
-	FallbackInterval time.Duration // How often to run fallback polling
-	BatchSize        int32
+type ListenerConfig struct {
+	DatabaseURL      string        // Postgres DSN for LISTEN/NOTIFY
+	NotifyChannel    string        // Channel name to LISTEN on
+	FallbackInterval time.Duration // How often to poll for missed events
 	MaxRetries       int
 	RetryDelay       time.Duration
-	DatabaseURL      string // Connection string for LISTEN connection
+	PingInterval     time.Duration
+	BatchSize        int32 // Max events to fetch per batch
 }
 
-func DefaultRealtimeConfig() RealtimeConfig {
-	return RealtimeConfig{
+func DefaultListenerConfig() ListenerConfig {
+	return ListenerConfig{
+		DatabaseURL:      "",
 		NotifyChannel:    "draft_outbox_events",
 		FallbackInterval: 30 * time.Second,
+		MaxRetries:       5,
+		RetryDelay:       200 * time.Millisecond,
+		PingInterval:     90 * time.Second,
 		BatchSize:        100,
-		MaxRetries:       3,
-		RetryDelay:       time.Second,
 	}
 }
 
-type RealtimeWorker struct {
+// Publisher is an interface that defines our publisher.
+type Publisher interface {
+	Publish(ctx context.Context, event OutboxEvent) error
+}
+
+type Listener struct {
 	db        *sql.DB
-	listenDB  *sql.DB // Separate connection for LISTEN
-	queries   *db.Queries
-	publisher EventPublisher
-	config    RealtimeConfig
-	logger    *slog.Logger
-
-	mu       sync.Mutex
-	running  bool
-	stopChan chan struct{}
-	wg       sync.WaitGroup
-
-	// Metrics
-	eventsProcessed uint64
-	lastProcessed   time.Time
+	queries   *draftdb.Queries
+	listener  *pq.Listener
+	publisher Publisher
+	cfg       ListenerConfig
 }
 
-func NewRealtimeWorker(database *sql.DB, publisher EventPublisher, cfg RealtimeConfig, logger *slog.Logger) (*RealtimeWorker, error) {
-	// For now, we'll use the same connection pool
-	// In production, you'd pass the connection string separately
-	listenDB, err := sql.Open("postgres", cfg.DatabaseURL)
-	if err != nil {
-		return nil, err
-	}
-	listenDB.SetMaxOpenConns(1)
-
-	// Ensure the listen connection stays open
-	listenDB.SetMaxOpenConns(1)
-	listenDB.SetMaxIdleConns(1)
-	listenDB.SetConnMaxLifetime(0)
-
-	return &RealtimeWorker{
-		db:        database,
-		listenDB:  listenDB,
-		queries:   db.New(database),
-		publisher: publisher,
-		config:    cfg,
-		logger:    logger,
-		stopChan:  make(chan struct{}),
-	}, nil
-}
-
-func (w *RealtimeWorker) Start(ctx context.Context) error {
-	w.mu.Lock()
-	if w.running {
-		w.mu.Unlock()
-		return fmt.Errorf("realtime worker already running")
-	}
-	w.running = true
-	w.mu.Unlock()
-
-	// Start listener goroutine
-	w.wg.Add(1)
-	go w.runListener(ctx)
-
-	// Start fallback poller goroutine
-	w.wg.Add(1)
-	go w.runFallbackPoller(ctx)
-
-	w.logger.Info("realtime outbox worker started",
-		slog.String("channel", w.config.NotifyChannel),
-		slog.Duration("fallback_interval", w.config.FallbackInterval))
-
-	return nil
-}
-
-func (w *RealtimeWorker) Stop() error {
-	w.mu.Lock()
-	if !w.running {
-		w.mu.Unlock()
-		return fmt.Errorf("realtime worker not running")
-	}
-	w.running = false
-	w.mu.Unlock()
-
-	// Signal all goroutines to stop
-	close(w.stopChan)
-	
-	// Wait for all goroutines to finish
-	w.wg.Wait()
-
-	// Close the listen connection if it's different from the main db connection
-	// and if it's not nil
-	if w.listenDB != nil && w.listenDB != w.db {
-		if err := w.listenDB.Close(); err != nil {
-			w.logger.Error("failed to close listen connection", slog.String("error", err.Error()))
-		}
-	}
-
-	w.logger.Info("realtime outbox worker stopped")
-	return nil
-}
-
-func (w *RealtimeWorker) runListener(ctx context.Context) {
-	defer w.wg.Done()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-w.stopChan:
-			return
-		default:
-			if err := w.listen(ctx); err != nil {
-				w.logger.Error("listener error, retrying", slog.String("error", err.Error()))
-				select {
-				case <-time.After(5 * time.Second):
-				case <-ctx.Done():
-					return
-				case <-w.stopChan:
-					return
-				}
-			}
-		}
-	}
-}
-
-func (w *RealtimeWorker) listen(ctx context.Context) error {
-	// Validate that we have a connection string
-	if w.config.DatabaseURL == "" {
-		return fmt.Errorf("database URL not configured for LISTEN connection")
-	}
-
-	// Create a listener
-	listener := pq.NewListener(
-		w.config.DatabaseURL,
-		10*time.Second, // Min reconnect interval
-		time.Minute,    // Max reconnect interval
+// TODO worker pool if we need to in the future
+func NewListener(dbConn *sql.DB, publisher Publisher, cfg ListenerConfig) (*Listener, error) {
+	l := pq.NewListener(
+		cfg.DatabaseURL,
+		10*time.Second,
+		time.Minute,
 		func(ev pq.ListenerEventType, err error) {
 			if err != nil {
-				w.logger.Error("listener event", slog.String("error", err.Error()))
+				log.Error().Err(err).Msg("listener event")
 			}
 		},
 	)
-	defer func() {
-		if err := listener.Close(); err != nil {
-			w.logger.Error("failed to close listener", slog.String("error", err.Error()))
-		}
-	}()
-
-	// Listen to the channel
-	if err := listener.Listen(w.config.NotifyChannel); err != nil {
-		return fmt.Errorf("failed to listen to channel: %w", err)
+	if err := l.Listen(cfg.NotifyChannel); err != nil {
+		return nil, fmt.Errorf("failed to listen to channel: %w", err)
 	}
 
-	w.logger.Info("listening for PostgreSQL notifications", slog.String("channel", w.config.NotifyChannel))
+	log.Info().
+		Str("channel", cfg.NotifyChannel).
+		Msg("listening for notifications")
 
-	// Process any pending events first
-	w.processPendingEvents(ctx)
+	return &Listener{
+		db:        dbConn,
+		queries:   draftdb.New(dbConn),
+		listener:  l,
+		publisher: publisher,
+		cfg:       cfg,
+	}, nil
+}
+
+func (l *Listener) Start(ctx context.Context) error {
+	log.Info().
+		Str("channel", l.cfg.NotifyChannel).
+		Dur("ping_interval", l.cfg.PingInterval).
+		Dur("fallback_interval", l.cfg.FallbackInterval).
+		Msg("listener started")
+
+	pingTicker := time.NewTicker(l.cfg.PingInterval)
+	fallbackTicker := time.NewTicker(l.cfg.FallbackInterval)
+	defer pingTicker.Stop()
+	defer fallbackTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case <-w.stopChan:
-			return nil
-		case notification := <-listener.Notify:
-			if notification == nil {
-				// Notification channel was closed, reconnect
+			log.Info().Msg("listener shutting down")
+			return l.Stop()
+		case note := <-l.listener.Notify:
+			if note == nil {
+				// nil notification means channel connection was lost so reconnect
 				continue
 			}
-
-			// Process the specific event
-			eventID, err := uuid.Parse(notification.Extra)
+			err := l.handleNotification(ctx, note.Extra)
 			if err != nil {
-				w.logger.Error("invalid event ID in notification",
-					slog.String("payload", notification.Extra),
-					slog.String("error", err.Error()))
-				continue
+				log.Error().Err(err).Msg("failed to handle notification")
 			}
-
-			w.logger.Debug("received notification", slog.String("event_id", eventID.String()))
-
-			if err := w.processEvent(ctx, eventID); err != nil {
-				w.logger.Error("failed to process event",
-					slog.String("event_id", eventID.String()),
-					slog.String("error", err.Error()))
+		case <-fallbackTicker.C:
+			err := l.processUnsent(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to process unsent events")
 			}
-
-		case <-time.After(90 * time.Second):
-			// Ping to keep connection alive
-			if err := listener.Ping(); err != nil {
-				return fmt.Errorf("ping failed: %w", err)
+		case <-pingTicker.C:
+			if err := l.listener.Ping(); err != nil {
+				log.Error().Err(err).Msg("failed to ping listener")
 			}
 		}
 	}
 }
 
-func (w *RealtimeWorker) processEvent(ctx context.Context, eventID uuid.UUID) error {
-	txn, err := w.db.BeginTx(ctx, nil)
+func (l *Listener) Stop() error {
+	return l.listener.Close()
+}
+
+// handleNotification handles a pg listen notification. Extra is the payload on the note.
+// It fetches the outbox event from the db, constructs an event and then publishes it.
+func (l *Listener) handleNotification(ctx context.Context, extra string) error {
+	id, err := uuid.Parse(extra)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		log.Error().Err(err).Msg("invalid event ID in notification")
+		return fmt.Errorf("invalid event ID in notification: %w", err)
 	}
-	defer func() {
-		if err != nil {
-			_ = txn.Rollback()
-		}
-	}()
 
-	qtx := w.queries.WithTx(txn)
-
-	// Fetch the specific event with row lock
-	events, err := qtx.FetchUnsentOutbox(ctx, 1)
+	row, err := l.queries.FetchOutboxByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to fetch event: %w", err)
+		log.Error().Err(err).Msg("failed to fetch outbox event")
+		return fmt.Errorf("failed to fetch outbox event: %w", err)
 	}
 
-	// Find our specific event
-	var targetEvent *db.FetchUnsentOutboxRow
-	for _, event := range events {
-		if event.ID == eventID {
-			targetEvent = &event
-			break
-		}
+	event := OutboxEvent{
+		ID:        row.ID,
+		DraftID:   row.DraftID,
+		EventType: row.EventType,
+		Payload:   row.Payload,
 	}
 
-	if targetEvent == nil {
-		// Event might have been processed by another worker
-		_ = txn.Rollback()
-		return nil
-	}
-
-	// Process the event
-	outboxEvent := OutboxEvent{
-		ID:        targetEvent.ID,
-		DraftID:   targetEvent.DraftID,
-		EventType: targetEvent.EventType,
-		Payload:   targetEvent.Payload,
-	}
-
-	if err := w.publishWithRetry(ctx, outboxEvent); err != nil {
+	err = l.publishWithRetry(ctx, event)
+	if err != nil {
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
 
-	// Mark as sent
-	if err := qtx.MarkOutboxSent(ctx, []uuid.UUID{targetEvent.ID}); err != nil {
-		return fmt.Errorf("failed to mark event as sent: %w", err)
+	if err := l.queries.MarkOutboxSent(ctx, id); err != nil {
+		log.Error().Err(err).Str("event_id", id.String()).Msg("failed to mark outbox event as sent")
+		return err
 	}
 
-	// Commit transaction
-	if err := txn.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	w.mu.Lock()
-	w.eventsProcessed++
-	w.lastProcessed = time.Now()
-	w.mu.Unlock()
-
-	w.logger.Info("processed event",
-		slog.String("event_id", targetEvent.ID.String()),
-		slog.String("event_type", targetEvent.EventType))
-
+	log.Info().Str("event_id", id.String()).Msg("published and marked event as sent")
 	return nil
 }
 
-func (w *RealtimeWorker) runFallbackPoller(ctx context.Context) {
-	defer w.wg.Done()
-
-	ticker := time.NewTicker(w.config.FallbackInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-w.stopChan:
-			return
-		case <-ticker.C:
-			w.processPendingEvents(ctx)
-		}
-	}
-}
-
-func (w *RealtimeWorker) processPendingEvents(ctx context.Context) {
-	txn, err := w.db.BeginTx(ctx, nil)
+// TODO Fix int32 type on batch size
+// processUnsent processes unsent message in our draft outbox.
+func (l *Listener) processUnsent(ctx context.Context) error {
+	unsent, err := l.queries.FetchUnsentOutbox(ctx, l.cfg.BatchSize)
 	if err != nil {
-		w.logger.Error("failed to begin transaction", slog.String("error", err.Error()))
-		return
-	}
-	defer func() {
-		if err != nil {
-			_ = txn.Rollback()
-		}
-	}()
-
-	qtx := w.queries.WithTx(txn)
-
-	// Fetch unsent events
-	events, err := qtx.FetchUnsentOutbox(ctx, w.config.BatchSize)
-	if err != nil {
-		w.logger.Error("failed to fetch unsent events", slog.String("error", err.Error()))
-		return
+		log.Error().Err(err).Msg("failed to fetch unsent outbox events")
+		return fmt.Errorf("failed to fetch unsent outbox events: %w", err)
 	}
 
-	if len(events) == 0 {
-		_ = txn.Rollback()
-		return
-	}
-
-	w.logger.Debug("processing pending events", slog.Int("count", len(events)))
-
-	var successfulIDs []uuid.UUID
-	for _, event := range events {
+	for _, event := range unsent {
 		outboxEvent := OutboxEvent{
 			ID:        event.ID,
 			DraftID:   event.DraftID,
@@ -344,69 +171,60 @@ func (w *RealtimeWorker) processPendingEvents(ctx context.Context) {
 			Payload:   event.Payload,
 		}
 
-		if err := w.publishWithRetry(ctx, outboxEvent); err != nil {
-			w.logger.Error("failed to publish event",
-				slog.String("event_id", event.ID.String()),
-				slog.String("error", err.Error()))
+		err := l.publishWithRetry(ctx, outboxEvent)
+		if err != nil {
+			log.Error().Err(err).Str("event_id", event.ID.String()).Msg("failed to publish event")
 			continue
 		}
 
-		successfulIDs = append(successfulIDs, event.ID)
-	}
-
-	if len(successfulIDs) > 0 {
-		if err := qtx.MarkOutboxSent(ctx, successfulIDs); err != nil {
-			w.logger.Error("failed to mark events as sent", slog.String("error", err.Error()))
-			return
+		if err := l.queries.MarkOutboxSent(ctx, outboxEvent.ID); err != nil {
+			log.Error().Err(err).Str("event_id", outboxEvent.ID.String()).Msg("failed to mark outbox event as sent")
+			continue
 		}
-
-		w.mu.Lock()
-		w.eventsProcessed += uint64(len(successfulIDs))
-		w.lastProcessed = time.Now()
-		w.mu.Unlock()
 	}
+	return nil
 
-	if err := txn.Commit(); err != nil {
-		w.logger.Error("failed to commit transaction", slog.String("error", err.Error()))
-		return
-	}
-
-	if len(successfulIDs) > 0 {
-		w.logger.Info("processed pending events",
-			slog.Int("total", len(events)),
-			slog.Int("successful", len(successfulIDs)))
-	}
 }
 
-func (w *RealtimeWorker) publishWithRetry(ctx context.Context, event OutboxEvent) error {
+// publishWithRetry attempts to publish an outbox event with a given retry delay and max retries.
+func (l *Listener) publishWithRetry(ctx context.Context, event OutboxEvent) error {
 	var lastErr error
 
-	for attempt := 0; attempt <= w.config.MaxRetries; attempt++ {
+	for attempt := 0; attempt <= l.cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
+			delay := l.cfg.RetryDelay * time.Duration(attempt)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(w.config.RetryDelay * time.Duration(attempt)):
+			case <-time.After(delay):
 			}
 		}
 
-		if err := w.publisher.Publish(ctx, event); err != nil {
+		// Try to publish
+		if err := l.publisher.Publish(ctx, event); err != nil {
 			lastErr = err
-			w.logger.Warn("failed to publish event, retrying",
-				slog.String("event_id", event.ID.String()),
-				slog.Int("attempt", attempt+1),
-				slog.String("error", err.Error()))
+			log.Error().
+				Err(err).
+				Int("attempt", attempt+1).
+				Str("event_id", event.ID.String()).
+				Msg("failed to publish, retrying")
 			continue
 		}
 
+		if err := l.queries.MarkOutboxSent(ctx, event.ID); err != nil {
+			log.Error().Err(err).Str("event_id", event.ID.String()).Msg("failed to mark outbox event as sent")
+			return err
+		}
+
+		if attempt > 0 {
+			log.Info().
+				Int("attempt", attempt+1).
+				Str("event_id", event.ID.String()).
+				Msg("publish succeeded after retry")
+		}
 		return nil
 	}
 
-	return fmt.Errorf("failed after %d attempts: %w", w.config.MaxRetries+1, lastErr)
-}
-
-func (w *RealtimeWorker) Stats() (uint64, time.Time) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.eventsProcessed, w.lastProcessed
+	// All attempts exhausted
+	return fmt.Errorf("publish failed after %d attempts: %w", l.cfg.MaxRetries+1, lastErr)
 }

@@ -3,9 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"log"
-	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,138 +10,94 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
 	"github.com/mcdev12/dynasty/go/internal/dbconfig"
 	"github.com/mcdev12/dynasty/go/internal/draft/outbox"
 )
 
 func main() {
-	// Load environment variables from .env file
+	// load .env
 	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: Could not load .env file: %v", err)
+		log.Warn().Err(err).Msg("could not load .env file")
 	}
 
-	// Setup logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	}))
+	// configure zerolog console output and level
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
-	// Setup database connection
+	// DB config
 	cfg := dbconfig.NewConfigFromEnv()
 	dsn := cfg.DSN()
-
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		log.Fatal("failed to open database:", err)
+		log.Fatal().Err(err).Msg("open database")
 	}
 	defer db.Close()
-
 	if err := db.Ping(); err != nil {
-		log.Fatal("failed to ping database:", err)
+		log.Fatal().Err(err).Msg("ping database")
 	}
+	log.Info().
+		Str("host", cfg.Host).
+		Int("port", cfg.Port).
+		Str("database", cfg.Database).
+		Msg("connected to database")
 
-	logger.Info("connected to database",
-		slog.String("host", cfg.Host),
-		slog.Int("port", cfg.Port),
-		slog.String("database", cfg.Database))
-
-	// Configure JetStream
-	jsConfig := outbox.DefaultJetStreamConfig()
+	// JetStream publisher
+	jsCfg := outbox.DefaultJetStreamConfig()
 	if url := os.Getenv("NATS_URL"); url != "" {
-		jsConfig.URL = url
+		jsCfg.URL = url
 	}
-
-	// Create JetStream publisher
-	publisher, err := outbox.NewJetStreamPublisher(jsConfig, logger)
+	publisher, err := outbox.NewJetStreamPublisher(jsCfg)
 	if err != nil {
-		log.Fatal("failed to create JetStream publisher:", err)
+		log.Fatal().Err(err).Msg("create JetStream publisher")
 	}
 	defer func() {
 		if err := publisher.Close(); err != nil {
-			logger.Error("failed to close publisher", slog.String("error", err.Error()))
+			log.Error().Err(err).Msg("close publisher")
 		}
 	}()
 
-	// Configure realtime worker
-	rtConfig := outbox.DefaultRealtimeConfig()
-	rtConfig.DatabaseURL = dsn // Use the same DSN for LISTEN connection
-	logger.Debug("using database URL for LISTEN connection", slog.String("database", cfg.Database))
-	if interval := os.Getenv("FALLBACK_INTERVAL"); interval != "" {
-		if d, err := time.ParseDuration(interval); err == nil {
-			rtConfig.FallbackInterval = d
+	// Listener config
+	ltCfg := outbox.DefaultListenerConfig()
+	ltCfg.DatabaseURL = dsn
+	if iv := os.Getenv("FALLBACK_INTERVAL"); iv != "" {
+		if d, err := time.ParseDuration(iv); err == nil {
+			ltCfg.FallbackInterval = d
 		}
 	}
 
-	// Create realtime worker
-	worker, err := outbox.NewRealtimeWorker(db, publisher, rtConfig, logger)
+	listener, err := outbox.NewListener(db, publisher, ltCfg)
 	if err != nil {
-		log.Fatal("failed to create realtime worker:", err)
+		log.Fatal().Err(err).Msg("create outbox listener")
 	}
 
-	// Setup context with cancellation
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	//GRACEFUL SHUTDOWN
 
-	// Start worker
-	if err := worker.Start(ctx); err != nil {
-		log.Fatal("failed to start realtime worker:", err)
-	}
+	// signal‐aware context
+	ctx, stop := signal.NotifyContext(context.Background(),
+		syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	// Setup health check endpoint
-	if os.Getenv("ENABLE_HEALTH_CHECK") == "true" {
-		// Get NATS connection from publisher (you'd need to expose this)
-		healthChecker := outbox.NewRealtimeHealthChecker(worker, db, nil, 5*time.Minute)
-
-		http.Handle("/health", healthChecker)
-		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-			exporter := outbox.NewPrometheusExporter(healthChecker)
-			w.Header().Set("Content-Type", "text/plain")
-			if _, err := w.Write([]byte(exporter.Export(r.Context()))); err != nil {
-				logger.Error("failed to write metrics", slog.String("error", err.Error()))
-			}
-		})
-
-		go func() {
-			port := os.Getenv("HEALTH_PORT")
-			if port == "" {
-				port = "8080"
-			}
-			logger.Info("starting health check server", slog.String("port", port))
-			if err := http.ListenAndServe(":"+port, nil); err != nil {
-				logger.Error("health check server failed", slog.String("error", err.Error()))
-			}
-		}()
-	}
-
-	// Setup graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	logger.Info("realtime outbox worker started, press Ctrl+C to stop")
-
-	// Wait for shutdown signal
-	<-sigChan
-	logger.Info("shutdown signal received, starting graceful shutdown")
-
-	// Cancel context to signal goroutines to stop
-	cancel()
-
-	// Create a timeout for graceful shutdown
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	// Stop worker gracefully
-	shutdownDone := make(chan struct{})
+	// run listener
+	errCh := make(chan error, 1)
 	go func() {
-		if err := worker.Stop(); err != nil {
-			logger.Error("failed to stop realtime worker", slog.String("error", err.Error()))
-		}
-		close(shutdownDone)
+		log.Info().Msg("starting realtime listener")
+		errCh <- listener.Start(ctx)
 	}()
 
+	// wait for shutdown or error
 	select {
-	case <-shutdownDone:
-		logger.Info("realtime outbox worker stopped gracefully")
-	case <-shutdownCtx.Done():
-		logger.Error("shutdown timeout exceeded, forcing exit")
+	case <-ctx.Done():
+		log.Info().Msg("shutdown signal received")
+		// allow in-flight work to finish
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		<-shutdownCtx.Done()
+		log.Info().Msg("graceful shutdown complete")
+
+	case err := <-errCh:
+		log.Error().Err(err).Msg("listener exited unexpectedly")
 	}
 }

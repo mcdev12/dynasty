@@ -7,10 +7,22 @@ SELECT id, draft_id, event_type, payload
 FROM draft_outbox
 WHERE sent_at IS NULL
 ORDER BY created_at
-LIMIT  $1
+LIMIT $1
     FOR UPDATE SKIP LOCKED;
 
 -- name: MarkOutboxSent :exec
 UPDATE draft_outbox
 SET sent_at = NOW()
-WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+WHERE id = $1;
+
+
+-- name: FetchOutboxByID :one
+SELECT
+    id,
+    draft_id,
+    event_type,
+    payload
+FROM draft_outbox
+WHERE id = $1
+  AND sent_at IS NULL
+    FOR UPDATE SKIP LOCKED;
