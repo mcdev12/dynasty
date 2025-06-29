@@ -12,8 +12,8 @@ service DraftService {
   // CRUD Operations
   rpc CreateDraft(CreateDraftRequest) returns (CreateDraftResponse);
   rpc GetDraft(GetDraftRequest) returns (GetDraftResponse);
-  rpc ListDraftsForLeague(ListDraftsForLeagueRequest) returns (ListDraftsForLeagueResponse);
-  rpc UpdateDraft(UpdateDraftRequest) returns (UpdateDraftResponse);
+  // TODO update draft settings eventually
+  rpc UpdateDraftStatus(UpdateDraftStatusRequest) returns (UpdateDraftStatusResponse);
   rpc DeleteDraft(DeleteDraftRequest) returns (DeleteDraftResponse);
 
   // Picks
@@ -50,6 +50,7 @@ message ListDraftsForLeagueResponse {
   repeated Draft drafts = 1;
 }
 
+// TODO remove status from here
 message UpdateDraftRequest {
   string draft_id = 1;
   optional DraftSettings settings = 2;
@@ -58,6 +59,15 @@ message UpdateDraftRequest {
 }
 
 message UpdateDraftResponse {
+  Draft draft = 1;
+}
+
+message UpdateDraftStatusRequest {
+  string draft_id = 1;
+  DraftStatus status = 2;
+}
+
+message UpdateDraftStatusResponse {
   Draft draft = 1;
 }
 

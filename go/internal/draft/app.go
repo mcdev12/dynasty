@@ -47,6 +47,8 @@ func NewApp(repo DraftRepository, pickRepo DraftPickRepositoryImpl, leaguesRepo 
 }
 
 // CreateDraft creates a new draft with validation
+// TODO create draft status should always be in not started
+// TODO later in Init league we will do lots of things
 func (a *App) CreateDraft(ctx context.Context, req repository.CreateDraftRequest) (*models.Draft, error) {
 	if err := a.validateCreateDraftRequest(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)

@@ -89,25 +89,15 @@ func (s *Service) GetDraft(ctx context.Context, req *connect.Request[draftv1.Get
 	}), nil
 }
 
-// ListDraftsForLeague - not implemented in app layer yet, return unimplemented
-func (s *Service) ListDraftsForLeague(ctx context.Context, req *connect.Request[draftv1.ListDraftsForLeagueRequest]) (*connect.Response[draftv1.ListDraftsForLeagueResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, nil)
-}
-
-// UpdateDraft updates a draft (currently only supports status updates)
-func (s *Service) UpdateDraft(ctx context.Context, req *connect.Request[draftv1.UpdateDraftRequest]) (*connect.Response[draftv1.UpdateDraftResponse], error) {
+// UpdateDraftStatus updates a draft status
+func (s *Service) UpdateDraftStatus(ctx context.Context, req *connect.Request[draftv1.UpdateDraftStatusRequest]) (*connect.Response[draftv1.UpdateDraftStatusResponse], error) {
 	id, err := uuid.Parse(req.Msg.DraftId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	// Currently only supporting status updates
-	if req.Msg.Status == nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	}
-
 	appReq := repository.UpdateDraftStatusRequest{
-		Status: s.protoToDraftStatus(*req.Msg.Status),
+		Status: s.protoToDraftStatus(req.Msg.Status),
 	}
 
 	draft, err := s.app.UpdateDraftStatus(ctx, id, appReq)
@@ -120,7 +110,7 @@ func (s *Service) UpdateDraft(ctx context.Context, req *connect.Request[draftv1.
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&draftv1.UpdateDraftResponse{
+	return connect.NewResponse(&draftv1.UpdateDraftStatusResponse{
 		Draft: protoDraft,
 	}), nil
 }
