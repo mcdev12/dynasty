@@ -3,6 +3,7 @@ package draft
 import (
 	"context"
 	"github.com/mcdev12/dynasty/go/internal/draft/repository"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -17,20 +18,34 @@ type DraftApp interface {
 	CreateDraft(ctx context.Context, req repository.CreateDraftRequest) (*models.Draft, error)
 	GetDraft(ctx context.Context, id uuid.UUID) (*models.Draft, error)
 	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error)
+	UpdateDraft(ctx context.Context, id uuid.UUID, req repository.UpdateDraftRequest) (*models.Draft, error)
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 	PrepopulateDraftPicks(ctx context.Context, draftID uuid.UUID) error
 	MakePick(ctx context.Context, req repository.MakePickRequest) error
+	FetchNextDeadline(ctx context.Context) (*repository.NextDeadline, error)
+	FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error)
+	UpdateNextDeadline(ctx context.Context, draftID uuid.UUID, deadline *time.Time) error
+	ClearNextDeadline(ctx context.Context, id uuid.UUID) error
+}
+
+type DraftOrchestrator interface {
+	StartDraft(ctx context.Context, draftID uuid.UUID) error
+	PauseDraft(ctx context.Context, draftID uuid.UUID) error
+	MakePick(ctx context.Context, req repository.MakePickRequest) error
+	RunScheduler(ctx context.Context) error
 }
 
 // Service implements the DraftService gRPC interface
 type Service struct {
-	app DraftApp
+	app  DraftApp
+	orch DraftOrchestrator
 }
 
 // NewService creates a new draft gRPC service
-func NewService(app DraftApp) *Service {
+func NewService(app DraftApp, orch DraftOrchestrator) *Service {
 	return &Service{
-		app: app,
+		app:  app,
+		orch: orch,
 	}
 }
 
@@ -89,30 +104,58 @@ func (s *Service) GetDraft(ctx context.Context, req *connect.Request[draftv1.Get
 	}), nil
 }
 
-// UpdateDraftStatus updates a draft status
-func (s *Service) UpdateDraftStatus(ctx context.Context, req *connect.Request[draftv1.UpdateDraftStatusRequest]) (*connect.Response[draftv1.UpdateDraftStatusResponse], error) {
+func (s *Service) UpdateDraft(ctx context.Context, req *connect.Request[draftv1.UpdateDraftRequest]) (*connect.Response[draftv1.UpdateDraftResponse], error) {
 	id, err := uuid.Parse(req.Msg.DraftId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	appReq := repository.UpdateDraftStatusRequest{
-		Status: s.protoToDraftStatus(req.Msg.Status),
+	// Build update request
+	updateReq := repository.UpdateDraftRequest{}
+	
+	// Handle optional settings update
+	if req.Msg.Settings != nil {
+		settings := s.protoToDraftSettings(req.Msg.Settings)
+		updateReq.Settings = &settings
 	}
-
-	draft, err := s.app.UpdateDraftStatus(ctx, id, appReq)
+	
+	// Handle optional scheduled_at update
+	if req.Msg.ScheduledAt != nil {
+		scheduledAt := req.Msg.ScheduledAt.AsTime()
+		updateReq.ScheduledAt = &scheduledAt
+	}
+	
+	// Perform the update
+	draft, err := s.app.UpdateDraft(ctx, id, updateReq)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
+	
+	// Convert response to proto
 	protoDraft, err := s.draftToProto(draft)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-
-	return connect.NewResponse(&draftv1.UpdateDraftStatusResponse{
+	
+	return connect.NewResponse(&draftv1.UpdateDraftResponse{
 		Draft: protoDraft,
 	}), nil
+}
+
+func (s *Service) PauseDraft(ctx context.Context, req *connect.Request[draftv1.PauseDraftRequest]) (*connect.Response[draftv1.PauseDraftResponse], error) {
+	id, _ := uuid.Parse(req.Msg.DraftId)
+	if err := s.orch.PauseDraft(ctx, id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&draftv1.PauseDraftResponse{}), nil
+}
+
+func (s *Service) StartDraft(ctx context.Context, req *connect.Request[draftv1.StartDraftRequest]) (*connect.Response[draftv1.StartDraftResponse], error) {
+	id, _ := uuid.Parse(req.Msg.DraftId)
+	if err := s.orch.StartDraft(ctx, id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&draftv1.StartDraftResponse{}), nil
 }
 
 // DeleteDraft deletes a draft by ID
@@ -136,12 +179,16 @@ func (s *Service) MakePick(ctx context.Context, req *connect.Request[draftv1.Mak
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	err = s.app.MakePick(ctx, appReq)
+	err = s.orch.MakePick(ctx, appReq)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	return connect.NewResponse(&draftv1.MakePickResponse{}), nil
+}
+
+func (s *Service) RunScheduler(ctx context.Context) error {
+	return s.orch.RunScheduler(ctx)
 }
 
 // Conversion methods between proto and app layer models

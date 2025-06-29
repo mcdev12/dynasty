@@ -16,6 +16,7 @@ type DraftRepository interface {
 	CreateDraft(ctx context.Context, req repository.CreateDraftRequest) (*models.Draft, error)
 	GetDraft(ctx context.Context, id uuid.UUID) (*models.Draft, error)
 	UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repository.UpdateDraftStatusRequest) (*models.Draft, error)
+	UpdateDraft(ctx context.Context, id uuid.UUID, req repository.UpdateDraftRequest) (*models.Draft, error)
 	DeleteDraft(ctx context.Context, id uuid.UUID) error
 	FetchNextDeadline(ctx context.Context) (*repository.NextDeadline, error)
 	FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error)
@@ -112,6 +113,41 @@ func (a *App) UpdateDraftStatus(ctx context.Context, id uuid.UUID, req repositor
 	}
 
 	log.Printf("Updated draft status: %s -> %s", currentDraft.Status, req.Status)
+	return draft, nil
+}
+
+// UpdateDraft updates a draft's settings and/or scheduled time
+func (a *App) UpdateDraft(ctx context.Context, id uuid.UUID, req repository.UpdateDraftRequest) (*models.Draft, error) {
+	// Verify draft exists
+	currentDraft, err := a.repo.GetDraft(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("draft not found: %w", err)
+	}
+
+	// Only allow updates for NOT_STARTED drafts
+	if currentDraft.Status != models.DraftStatusNotStarted {
+		return nil, fmt.Errorf("can only update drafts with status %s, current status is %s",
+			models.DraftStatusNotStarted, currentDraft.Status)
+	}
+
+	// Validate new settings if provided
+	if req.Settings != nil {
+		if err := a.validateDraftSettings(currentDraft.DraftType, *req.Settings); err != nil {
+			return nil, fmt.Errorf("invalid draft settings: %w", err)
+		}
+	}
+
+	// Validate scheduled_at if provided
+	if req.ScheduledAt != nil && req.ScheduledAt.Before(time.Now()) {
+		return nil, fmt.Errorf("scheduled_at must be in the future")
+	}
+
+	draft, err := a.repo.UpdateDraft(ctx, id, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update draft: %w", err)
+	}
+
+	log.Printf("Updated draft %s: settings=%v, scheduled_at=%v", id, req.Settings != nil, req.ScheduledAt)
 	return draft, nil
 }
 

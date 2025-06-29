@@ -29,8 +29,8 @@ WHERE id = $1;
 UPDATE draft
 SET
     status = $2,
-    started_at = CASE WHEN $2::text = 'IN_PROGRESS' THEN NOW() ELSE started_at END,
-    completed_at = CASE WHEN $2::text = 'COMPLETED' THEN NOW() ELSE completed_at END,
+    started_at = CASE WHEN $2 = 'IN_PROGRESS'::draft_status THEN NOW() ELSE started_at END,
+    completed_at = CASE WHEN $2 = 'COMPLETED'::draft_status THEN NOW() ELSE completed_at END,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
@@ -73,3 +73,13 @@ WHERE id = $1;
 UPDATE draft
 SET next_deadline = NULL
 WHERE id = $1;
+
+-- name: UpdateDraft :one
+-- Update draft settings and/or scheduled_at
+UPDATE draft
+SET
+    settings = COALESCE($2, settings),
+    scheduled_at = COALESCE($3, scheduled_at),
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;

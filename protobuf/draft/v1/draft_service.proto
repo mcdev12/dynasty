@@ -12,8 +12,10 @@ service DraftService {
   // CRUD Operations
   rpc CreateDraft(CreateDraftRequest) returns (CreateDraftResponse);
   rpc GetDraft(GetDraftRequest) returns (GetDraftResponse);
+  rpc UpdateDraft(UpdateDraftRequest) returns (UpdateDraftResponse);
   // TODO update draft settings eventually
-  rpc UpdateDraftStatus(UpdateDraftStatusRequest) returns (UpdateDraftStatusResponse);
+  rpc StartDraft(StartDraftRequest) returns (StartDraftResponse);
+  rpc PauseDraft(PauseDraftRequest) returns (PauseDraftResponse);
   rpc DeleteDraft(DeleteDraftRequest) returns (DeleteDraftResponse);
 
   // Picks
@@ -54,7 +56,6 @@ message ListDraftsForLeagueResponse {
 message UpdateDraftRequest {
   string draft_id = 1;
   optional DraftSettings settings = 2;
-  optional DraftStatus status = 3;
   optional google.protobuf.Timestamp scheduled_at = 4;
 }
 
@@ -62,13 +63,20 @@ message UpdateDraftResponse {
   Draft draft = 1;
 }
 
-message UpdateDraftStatusRequest {
+message StartDraftRequest {
   string draft_id = 1;
-  DraftStatus status = 2;
 }
 
-message UpdateDraftStatusResponse {
-  Draft draft = 1;
+message StartDraftResponse {
+  string draft_id = 1;
+}
+
+message PauseDraftRequest {
+  string draft_id = 1;
+}
+
+message PauseDraftResponse {
+  string draft_id = 1;
 }
 
 message DeleteDraftRequest {

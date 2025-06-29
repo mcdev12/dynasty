@@ -3,21 +3,20 @@ package main
 import (
 	"database/sql"
 	"github.com/mcdev12/dynasty/go/internal/draft"
+	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
 	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
-	"github.com/mcdev12/dynasty/go/internal/leagues"
-	"github.com/mcdev12/dynasty/go/internal/roster"
-	"github.com/mcdev12/dynasty/go/internal/users"
-
-	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
 	fantasyteamdb "github.com/mcdev12/dynasty/go/internal/fantasyteam/db"
+	"github.com/mcdev12/dynasty/go/internal/leagues"
 	leaguedb "github.com/mcdev12/dynasty/go/internal/leagues/db"
 	"github.com/mcdev12/dynasty/go/internal/player"
 	playerdb "github.com/mcdev12/dynasty/go/internal/player/db"
+	"github.com/mcdev12/dynasty/go/internal/roster"
 	rosterdb "github.com/mcdev12/dynasty/go/internal/roster/db"
 	"github.com/mcdev12/dynasty/go/internal/sports/base"
 	"github.com/mcdev12/dynasty/go/internal/teams"
 	teamsdb "github.com/mcdev12/dynasty/go/internal/teams/db"
+	"github.com/mcdev12/dynasty/go/internal/users"
 	usersdb "github.com/mcdev12/dynasty/go/internal/users/db"
 )
 
@@ -76,7 +75,8 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	draftRepo := repository.NewRepository(draftQueries)
 	draftPickRepo := repository.NewDraftPickRepository(draftQueries, database)
 	draftApp := draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
-	draftService := draft.NewService(draftApp)
+	draftOrchestrator := draft.NewOrchestrator(draftApp, int32(100))
+	draftService := draft.NewService(draftApp, draftOrchestrator)
 
 	return &Services{
 		Teams:       teamsService,

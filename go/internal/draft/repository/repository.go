@@ -35,6 +35,11 @@ type UpdateDraftStatusRequest struct {
 	Status models.DraftStatus `json:"status"`
 }
 
+type UpdateDraftRequest struct {
+	Settings    *models.DraftSettings `json:"settings"`
+	ScheduledAt *time.Time           `json:"scheduled_at"`
+}
+
 func (r *Repository) CreateDraft(ctx context.Context, req CreateDraftRequest) (*models.Draft, error) {
 	settingsBytes, err := json.Marshal(req.Settings)
 	if err != nil {
@@ -148,6 +153,36 @@ func (r *Repository) ClearNextDeadline(ctx context.Context, id uuid.UUID) error 
 		return fmt.Errorf("failed to clear next deadline: %w", err)
 	}
 	return nil
+}
+
+func (r *Repository) UpdateDraft(ctx context.Context, id uuid.UUID, req UpdateDraftRequest) (*models.Draft, error) {
+	var settingsBytes []byte
+	var scheduledAt sql.NullTime
+	
+	// Handle settings update
+	if req.Settings != nil {
+		var err error
+		settingsBytes, err = json.Marshal(req.Settings)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal draft settings: %w", err)
+		}
+	}
+	
+	// Handle scheduled_at update
+	if req.ScheduledAt != nil {
+		scheduledAt = sql.NullTime{Time: *req.ScheduledAt, Valid: true}
+	}
+	
+	draft, err := r.queries.UpdateDraft(ctx, db.UpdateDraftParams{
+		ID:          id,
+		Settings:    settingsBytes,
+		ScheduledAt: scheduledAt,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update draft: %w", err)
+	}
+	
+	return r.dbDraftToModel(draft), nil
 }
 
 func (r *Repository) dbDraftToModel(dbDraft db.Draft) *models.Draft {

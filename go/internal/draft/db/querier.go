@@ -32,6 +32,8 @@ type Querier interface {
 	InsertOutboxPickMade(ctx context.Context, arg InsertOutboxPickMadeParams) error
 	MakePick(ctx context.Context, arg MakePickParams) (int64, error)
 	MarkOutboxSent(ctx context.Context, id uuid.UUID) error
+	// Update draft settings and/or scheduled_at
+	UpdateDraft(ctx context.Context, arg UpdateDraftParams) (Draft, error)
 	UpdateDraftPickPlayer(ctx context.Context, arg UpdateDraftPickPlayerParams) (DraftPick, error)
 	UpdateDraftStatus(ctx context.Context, arg UpdateDraftStatusParams) (Draft, error)
 	// Set the next pick deadline for a draft (e.g. after a pick or resume).
