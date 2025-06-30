@@ -271,6 +271,15 @@ func (dp *DraftPickRepository) ClaimNextPickSlot(ctx context.Context, draftID uu
 	}, nil
 }
 
+// InsertOutboxPickStarted inserts a PickStarted event into the outbox
+func (dp *DraftPickRepository) InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	return dp.queries.InsertOutboxPickStarted(ctx, db.InsertOutboxPickStartedParams{
+		ID:      uuid.New(),
+		DraftID: draftID,
+		Payload: payload,
+	})
+}
+
 func (r *DraftPickRepository) dbDraftPickToModel(dbPick db.DraftPick) *models.DraftPick {
 	var playerID *uuid.UUID
 	if dbPick.PlayerID.Valid {

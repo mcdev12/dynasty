@@ -3,6 +3,7 @@ package draft
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork" // optional; import only if you want fake clocks
+	"github.com/mcdev12/dynasty/go/internal/draft/gateway"
 	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"github.com/rs/zerolog/log"
@@ -67,9 +69,16 @@ func (o *Orchestrator) MakePick(ctx context.Context, req repository.MakePickRequ
 		return err
 	}
 	// 2) Schedule next timeout
-	next := o.clock.Now().Add(timeOut)
+	startedAt := o.clock.Now()
+	next := startedAt.Add(timeOut)
 	if err := o.app.UpdateNextDeadline(ctx, req.DraftID, &next); err != nil {
 		return err
+	}
+
+	// 3) Emit PickStarted event for the next pick
+	if err := o.emitPickStartedEvent(ctx, req.DraftID, startedAt, next); err != nil {
+		log.Error().Err(err).Str("draft_id", req.DraftID.String()).Msg("failed to emit PickStarted event")
+		// Don't fail the operation, just log the error
 	}
 
 	// signal the scheduler in case this new deadline is sooner
@@ -91,10 +100,17 @@ func (o *Orchestrator) StartDraft(ctx context.Context, draftID uuid.UUID) error 
 	if err != nil {
 		return err
 	}
-	next := o.clock.Now().Add(timeOut)
+	startedAt := o.clock.Now()
+	next := startedAt.Add(timeOut)
 
 	if err := o.app.UpdateNextDeadline(ctx, draftID, &next); err != nil {
 		return err
+	}
+
+	// Emit PickStarted event for the first pick
+	if err := o.emitPickStartedEvent(ctx, draftID, startedAt, next); err != nil {
+		log.Error().Err(err).Str("draft_id", draftID.String()).Msg("failed to emit PickStarted event")
+		// Don't fail the operation, just log the error
 	}
 
 	// wake the scheduler
@@ -369,4 +385,40 @@ func (o *Orchestrator) getPickTime(ctx context.Context, draftID uuid.UUID) (time
 
 	secs := draft.Settings.TimePerPickSec
 	return time.Duration(secs) * time.Second, nil
+}
+
+// emitPickStartedEvent emits a PickStarted event to the outbox when a pick timer begins
+func (o *Orchestrator) emitPickStartedEvent(ctx context.Context, draftID uuid.UUID, startedAt, timeoutAt time.Time) error {
+	// Get the next pick information
+	nextPick, err := o.app.GetNextPickForDraft(ctx, draftID)
+	if err != nil {
+		return fmt.Errorf("failed to get next pick for PickStarted event: %w", err)
+	}
+
+	// Get draft settings for time per pick
+	draft, err := o.app.GetDraft(ctx, draftID)
+	if err != nil {
+		return fmt.Errorf("failed to get draft for PickStarted event: %w", err)
+	}
+
+	// Create PickStarted payload
+	payload := gateway.PickStartedPayload{
+		PickID:         nextPick.ID.String(),
+		TeamID:         nextPick.TeamID.String(),
+		Round:          nextPick.Round,
+		Pick:           nextPick.Pick,
+		OverallPick:    nextPick.OverallPick,
+		StartedAt:      startedAt,
+		TimeoutAt:      timeoutAt,
+		TimePerPickSec: draft.Settings.TimePerPickSec,
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal PickStarted payload: %w", err)
+	}
+
+	// Insert into outbox
+	return o.app.InsertOutboxPickStarted(ctx, draftID, payloadBytes)
 }

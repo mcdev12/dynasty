@@ -32,6 +32,8 @@ type DraftPickRepositoryImpl interface {
 	MakePick(ctx context.Context, pickRequest repository.MakePickRequest) error
 	CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int, error)
 	ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*repository.Slot, error)
+	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error)
+	InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error
 }
 
 // LeaguesRepository defines what the app layer needs from the leagues repository for validation
@@ -546,4 +548,27 @@ func (a *App) ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUI
 	}
 
 	return players, nil
+}
+
+// GetNextPickForDraft returns the next pick that needs to be made for a draft
+func (a *App) GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error) {
+	// Verify draft exists
+	if _, err := a.repo.GetDraft(ctx, draftID); err != nil {
+		return nil, fmt.Errorf("draft not found: %w", err)
+	}
+
+	pick, err := a.pickRepo.GetNextPickForDraft(ctx, draftID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next pick for draft: %w", err)
+	}
+
+	return pick, nil
+}
+
+// InsertOutboxPickStarted inserts a PickStarted event into the outbox
+func (a *App) InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	if err := a.pickRepo.InsertOutboxPickStarted(ctx, draftID, payload); err != nil {
+		return fmt.Errorf("failed to insert PickStarted outbox event: %w", err)
+	}
+	return nil
 }

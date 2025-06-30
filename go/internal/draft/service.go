@@ -29,6 +29,8 @@ type DraftApp interface {
 	CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int, error)
 	ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*repository.Slot, error)
 	ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]repository.AvailablePlayer, error)
+	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error)
+	InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error
 }
 
 type DraftOrchestrator interface {
