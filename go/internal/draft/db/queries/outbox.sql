@@ -2,6 +2,26 @@
 INSERT INTO draft_outbox (id, draft_id, event_type, payload)
 VALUES ($1, $2, 'PickMade', $3);
 
+-- name: InsertOutboxPickStarted :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'PickStarted', $3);
+
+-- name: InsertOutboxDraftStarted :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftStarted', $3);
+
+-- name: InsertOutboxDraftPaused :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftPaused', $3);
+
+-- name: InsertOutboxDraftResumed :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftResumed', $3);
+
+-- name: InsertOutboxDraftCompleted :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftCompleted', $3);
+
 -- name: FetchUnsentOutbox :many
 SELECT id, draft_id, event_type, payload
 FROM draft_outbox

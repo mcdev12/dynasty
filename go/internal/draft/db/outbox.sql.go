@@ -87,6 +87,70 @@ func (q *Queries) FetchUnsentOutbox(ctx context.Context, limit int32) ([]FetchUn
 	return items, nil
 }
 
+const insertOutboxDraftCompleted = `-- name: InsertOutboxDraftCompleted :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftCompleted', $3)
+`
+
+type InsertOutboxDraftCompletedParams struct {
+	ID      uuid.UUID       `json:"id"`
+	DraftID uuid.UUID       `json:"draft_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) InsertOutboxDraftCompleted(ctx context.Context, arg InsertOutboxDraftCompletedParams) error {
+	_, err := q.db.ExecContext(ctx, insertOutboxDraftCompleted, arg.ID, arg.DraftID, arg.Payload)
+	return err
+}
+
+const insertOutboxDraftPaused = `-- name: InsertOutboxDraftPaused :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftPaused', $3)
+`
+
+type InsertOutboxDraftPausedParams struct {
+	ID      uuid.UUID       `json:"id"`
+	DraftID uuid.UUID       `json:"draft_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) InsertOutboxDraftPaused(ctx context.Context, arg InsertOutboxDraftPausedParams) error {
+	_, err := q.db.ExecContext(ctx, insertOutboxDraftPaused, arg.ID, arg.DraftID, arg.Payload)
+	return err
+}
+
+const insertOutboxDraftResumed = `-- name: InsertOutboxDraftResumed :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftResumed', $3)
+`
+
+type InsertOutboxDraftResumedParams struct {
+	ID      uuid.UUID       `json:"id"`
+	DraftID uuid.UUID       `json:"draft_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) InsertOutboxDraftResumed(ctx context.Context, arg InsertOutboxDraftResumedParams) error {
+	_, err := q.db.ExecContext(ctx, insertOutboxDraftResumed, arg.ID, arg.DraftID, arg.Payload)
+	return err
+}
+
+const insertOutboxDraftStarted = `-- name: InsertOutboxDraftStarted :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'DraftStarted', $3)
+`
+
+type InsertOutboxDraftStartedParams struct {
+	ID      uuid.UUID       `json:"id"`
+	DraftID uuid.UUID       `json:"draft_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) InsertOutboxDraftStarted(ctx context.Context, arg InsertOutboxDraftStartedParams) error {
+	_, err := q.db.ExecContext(ctx, insertOutboxDraftStarted, arg.ID, arg.DraftID, arg.Payload)
+	return err
+}
+
 const insertOutboxPickMade = `-- name: InsertOutboxPickMade :exec
 INSERT INTO draft_outbox (id, draft_id, event_type, payload)
 VALUES ($1, $2, 'PickMade', $3)
@@ -100,6 +164,22 @@ type InsertOutboxPickMadeParams struct {
 
 func (q *Queries) InsertOutboxPickMade(ctx context.Context, arg InsertOutboxPickMadeParams) error {
 	_, err := q.db.ExecContext(ctx, insertOutboxPickMade, arg.ID, arg.DraftID, arg.Payload)
+	return err
+}
+
+const insertOutboxPickStarted = `-- name: InsertOutboxPickStarted :exec
+INSERT INTO draft_outbox (id, draft_id, event_type, payload)
+VALUES ($1, $2, 'PickStarted', $3)
+`
+
+type InsertOutboxPickStartedParams struct {
+	ID      uuid.UUID       `json:"id"`
+	DraftID uuid.UUID       `json:"draft_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) InsertOutboxPickStarted(ctx context.Context, arg InsertOutboxPickStartedParams) error {
+	_, err := q.db.ExecContext(ctx, insertOutboxPickStarted, arg.ID, arg.DraftID, arg.Payload)
 	return err
 }
 

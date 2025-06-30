@@ -31,7 +31,12 @@ type Querier interface {
 	GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]DraftPick, error)
 	GetDraftPicksByRound(ctx context.Context, arg GetDraftPicksByRoundParams) ([]DraftPick, error)
 	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (DraftPick, error)
+	InsertOutboxDraftCompleted(ctx context.Context, arg InsertOutboxDraftCompletedParams) error
+	InsertOutboxDraftPaused(ctx context.Context, arg InsertOutboxDraftPausedParams) error
+	InsertOutboxDraftResumed(ctx context.Context, arg InsertOutboxDraftResumedParams) error
+	InsertOutboxDraftStarted(ctx context.Context, arg InsertOutboxDraftStartedParams) error
 	InsertOutboxPickMade(ctx context.Context, arg InsertOutboxPickMadeParams) error
+	InsertOutboxPickStarted(ctx context.Context, arg InsertOutboxPickStartedParams) error
 	// List all players not yet picked in draft $1, ordered by name.
 	ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]ListAvailablePlayersForDraftRow, error)
 	MakePick(ctx context.Context, arg MakePickParams) (int64, error)
