@@ -177,6 +177,51 @@ func (q *Queries) GetDraft(ctx context.Context, id uuid.UUID) (Draft, error) {
 	return i, err
 }
 
+const listAvailablePlayersForDraft = `-- name: ListAvailablePlayersForDraft :many
+SELECT
+    p.id,
+    p.full_name,
+    p.team_id
+FROM players p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM draft_picks dp
+    WHERE dp.draft_id  = $1
+      AND dp.player_id = p.id
+)
+ORDER BY p.full_name
+`
+
+type ListAvailablePlayersForDraftRow struct {
+	ID       uuid.UUID     `json:"id"`
+	FullName string        `json:"full_name"`
+	TeamID   uuid.NullUUID `json:"team_id"`
+}
+
+// List all players not yet picked in draft $1, ordered by name.
+func (q *Queries) ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]ListAvailablePlayersForDraftRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAvailablePlayersForDraft, draftID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAvailablePlayersForDraftRow
+	for rows.Next() {
+		var i ListAvailablePlayersForDraftRow
+		if err := rows.Scan(&i.ID, &i.FullName, &i.TeamID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateDraft = `-- name: UpdateDraft :one
 UPDATE draft
 SET

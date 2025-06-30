@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,20 +22,23 @@ type Clock interface {
 }
 
 type Orchestrator struct {
-	app       DraftApp // your business logic
-	batchSize int32    // how many due picks to claim at once
-	clock     Clock
-
-	wakeCh chan struct{}
+	app        DraftApp // your business logic
+	batchSize  int32    // how many due picks to claim at once
+	clock      Clock
+	strat      AutoPickStrategy // << add this
+	wakeCh     chan struct{}
+	instanceID string // unique ID for this scheduler instance
 }
 
-// TODO make this its own? Decouple from this binary?
-func NewOrchestrator(app DraftApp, batchSize int32) *Orchestrator {
+// NewOrchestrator creates a new draft orchestrator
+func NewOrchestrator(app DraftApp, strat AutoPickStrategy, batchSize int32) *Orchestrator {
 	return &Orchestrator{
-		app:       app,
-		batchSize: batchSize,
-		clock:     clockwork.NewRealClock(),
-		wakeCh:    make(chan struct{}, 1),
+		app:        app,
+		batchSize:  batchSize,
+		strat:      strat,
+		clock:      clockwork.NewRealClock(),
+		wakeCh:     make(chan struct{}, 1),
+		instanceID: uuid.New().String()[:8], // short ID for logging
 	}
 }
 
@@ -97,113 +101,174 @@ func (o *Orchestrator) PauseDraft(ctx context.Context, draftID uuid.UUID) error 
 }
 
 // RunScheduler loops forever, sleeping until the next deadline and firing timeouts.
-// TODO probably ahve to kill this its too complex lmao
-// TODO figure out completion
 func (o *Orchestrator) RunScheduler(ctx context.Context) error {
-	log.Info().Msg("scheduler started")
+	log.Info().Str("instance", o.instanceID).Msg("scheduler started")
 	timer := o.clock.NewTimer(0)
 	defer timer.Stop()
 
+	const idlePollDuration = 5 * time.Second
+	retryCount := 0
+	const maxRetries = 3
+
 	for {
-		//log.Debug().Msg("scheduler: fetching next deadline")
+		// TODO do this in a loop Drain wake channel to prevent tight loops
+		select {
+		case <-o.wakeCh:
+			log.Debug().Str("instance", o.instanceID).Msg("drained wake channel")
+		default:
+		}
+
 		nd, err := o.app.FetchNextDeadline(ctx)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				log.Info().Msg("no in-progress drafts; polling again in 5s")
+				// No drafts in progress - idle with timer reuse
+				log.Info().Str("instance", o.instanceID).Msg("no in-progress drafts; polling again in 5s")
+				timer.Reset(idlePollDuration)
 				select {
-				case <-time.After(5 * time.Second):
+				case <-timer.Chan():
 					continue
 				case <-ctx.Done():
-					log.Info().Msg("shutdown during idle (no drafts)")
+					log.Info().Str("instance", o.instanceID).Msg("shutdown during idle (no drafts)")
 					return nil
 				case <-o.wakeCh:
-					log.Debug().Msg("woken up")
+					log.Debug().Str("instance", o.instanceID).Msg("woken up from idle")
 					continue
 				}
 			}
-			log.Error().Err(err).Msg("error fetching next deadline")
+
+			// Handle transient errors with retry
+			retryCount++
+			if retryCount <= maxRetries {
+				log.Error().
+					Err(err).
+					Int("retry", retryCount).
+					Str("instance", o.instanceID).
+					Msg("error fetching next deadline, retrying")
+				timer.Reset(time.Second * time.Duration(retryCount))
+				select {
+				case <-timer.Chan():
+					continue
+				case <-ctx.Done():
+					return nil
+				}
+			}
+			log.Error().Err(err).Str("instance", o.instanceID).Msg("error fetching next deadline after retries")
 			return err
 		}
+		retryCount = 0 // Reset on success
 
 		if nd.Deadline == nil {
+			// Draft exists but no deadline - idle with timer reuse
 			log.Info().
 				Str("draft_id", nd.DraftID.String()).
+				Str("instance", o.instanceID).
 				Msg("draft exists but no deadline set; polling again in 5s")
+			timer.Reset(idlePollDuration)
 			select {
-			case <-time.After(5 * time.Second):
+			case <-timer.Chan():
 				continue
 			case <-ctx.Done():
-				log.Info().Msg("shutdown during idle (paused/completed)")
+				log.Info().Str("instance", o.instanceID).Msg("shutdown during idle (paused/completed)")
 				return nil
 			case <-o.wakeCh:
-				log.Debug().Msg("woken up")
+				log.Debug().Str("instance", o.instanceID).Msg("woken up from idle")
 				continue
 			}
 		}
 
 		wait := nd.Deadline.Sub(o.clock.Now())
-		//log.Info().
-		//	Str("draft_id", nd.DraftID.String()).
-		//	Time("next_deadline", *nd.Deadline).
-		//	Dur("will_wait", wait).
-		//	Msg("waiting until next deadline")
-
 		if wait > 0 {
 			timer.Reset(wait)
 			select {
 			case <-timer.Chan():
-				log.Info().Msg("timer fired — fetching due drafts")
+				log.Info().Str("instance", o.instanceID).Msg("timer fired — fetching due drafts")
 			case <-ctx.Done():
-				log.Info().Msg("shutdown during wait")
+				log.Info().Str("instance", o.instanceID).Msg("shutdown during wait")
 				return nil
 			case <-o.wakeCh:
-				log.Debug().Msg("woken up early — new sooner deadline")
+				log.Debug().Str("instance", o.instanceID).Msg("woken up early — new sooner deadline")
 				continue
 			}
 		}
 
 		due, err := o.app.FetchDraftsDueForPick(ctx, o.batchSize)
 		if err != nil {
-			log.Error().Err(err).Msg("error fetching due drafts")
-			return err
+			log.Error().Err(err).Str("instance", o.instanceID).Msg("error fetching due drafts")
+			// Don't exit on error - retry next iteration
+			timer.Reset(time.Second)
+			select {
+			case <-timer.Chan():
+				continue
+			case <-ctx.Done():
+				return nil
+			}
 		}
-		log.Info().
-			Int("count_due", len(due)).
-			Int32("batch_size", o.batchSize).
-			Msg("processing due drafts")
 
-		for _, draftID := range due {
-			log.Info().Str("draft_id", draftID.String()).Msg("handling timeout")
-			if err := o.handleTimeout(ctx, draftID); err != nil {
-				log.Error().
-					Err(err).
-					Str("draft_id", draftID.String()).
-					Msg("timeout handling failed")
+		if len(due) > 0 {
+			log.Info().
+				Int("count_due", len(due)).
+				Int32("batch_size", o.batchSize).
+				Str("instance", o.instanceID).
+				Msg("processing due drafts")
+
+			// Process timeouts sequentially (no worker pool)
+			for _, draftID := range due {
+				select {
+				case <-ctx.Done():
+					log.Info().Str("instance", o.instanceID).Msg("shutdown while processing timeouts")
+					return nil
+				default:
+					log.Info().Str("draft_id", draftID.String()).Str("instance", o.instanceID).Msg("handling timeout")
+					if err := o.handleTimeout(ctx, draftID); err != nil {
+						log.Error().
+							Err(err).
+							Str("draft_id", draftID.String()).
+							Str("instance", o.instanceID).
+							Msg("timeout handling failed")
+					}
+				}
 			}
 		}
 	}
 }
 
-// TODO implement
 func (o *Orchestrator) handleTimeout(ctx context.Context, draftID uuid.UUID) error {
-	// 1) Compute the next timeout for this draft
-	timeout, err := o.getPickTime(ctx, draftID)
+	log.Info().Str("draft_id", draftID.String()).Msg("auto-pick timeout firing")
+
+	// 1) Attempt to claim the next slot
+	req, err := o.strat.SelectClaim(ctx, draftID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || err.Error() == "no available slots to claim" {
+			// ← no slots left ⇒ finalize the draft now
+			return o.finalizeIfComplete(ctx, draftID)
+		}
+		log.Warn().Err(err).Msg("auto-pick strategy failed")
+		return nil
+	}
+
+	// 2) We got a slot—record the pick and schedule the next deadline
+	if err := o.MakePick(ctx, req); err != nil {
+		return fmt.Errorf("auto-pick MakePick failed: %w", err)
+	}
+
+	// 3) After every successful pick, check if that was the last one
+	return o.finalizeIfComplete(ctx, draftID)
+}
+
+func (o *Orchestrator) finalizeIfComplete(ctx context.Context, draftID uuid.UUID) error {
+	rem, _ := o.app.CountRemainingPicks(ctx, draftID)
+	if rem > 0 {
+		return nil
+	}
+	// Mark draft completed and clear any deadline
+	_, err := o.app.UpdateDraftStatus(ctx, draftID, repository.UpdateDraftStatusRequest{
+		Status: models.DraftStatusCompleted,
+	})
 	if err != nil {
 		return err
 	}
+	return o.app.ClearNextDeadline(ctx, draftID)
 
-	// 2) Advance the deadline in the DB so we don't spin on the same one
-	next := o.clock.Now().Add(timeout)
-	if err := o.app.UpdateNextDeadline(ctx, draftID, &next); err != nil {
-		return err
-	}
-
-	log.Info().
-		Str("draft_id", draftID.String()).
-		Time("new_deadline", next).
-		Msg("advanced deadline on timeout (no-op pick)")
-
-	return nil
 }
 
 func (o *Orchestrator) getPickTime(ctx context.Context, draftID uuid.UUID) (time.Duration, error) {

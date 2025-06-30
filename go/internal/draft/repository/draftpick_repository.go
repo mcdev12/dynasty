@@ -245,6 +245,32 @@ func (dp *DraftPickRepository) MakePick(ctx context.Context, pickRequest MakePic
 	return nil
 }
 
+func (dp *DraftPickRepository) CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int, error) {
+	remaining, err := dp.queries.CountRemainingPicks(ctx, draftID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count remaining picks: %w", err)
+	}
+	return int(remaining), nil
+}
+
+type Slot struct {
+	PickID      uuid.UUID `json:"pick_id"`
+	TeamID      uuid.UUID `json:"team_id"`
+	OverallPick int       `json:"overall_pick"`
+}
+
+func (dp *DraftPickRepository) ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*Slot, error) {
+	slot, err := dp.queries.ClaimNextPickSlot(ctx, draftID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to claim next pick slot: %w", err)
+	}
+	return &Slot{
+		PickID:      slot.ID,
+		TeamID:      slot.TeamID,
+		OverallPick: int(slot.OverallPick),
+	}, nil
+}
+
 func (r *DraftPickRepository) dbDraftPickToModel(dbPick db.DraftPick) *models.DraftPick {
 	var playerID *uuid.UUID
 	if dbPick.PlayerID.Valid {

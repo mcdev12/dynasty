@@ -22,6 +22,7 @@ type DraftRepository interface {
 	FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error)
 	UpdateNextDeadline(ctx context.Context, draftID uuid.UUID, deadline *time.Time) error
 	ClearNextDeadline(ctx context.Context, id uuid.UUID) error
+	ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]repository.AvailablePlayer, error)
 }
 
 // DraftPickRepositoryImpl defines what the app layer needs from the draft pick repository
@@ -29,6 +30,8 @@ type DraftPickRepositoryImpl interface {
 	CreateDraftPicksBatch(ctx context.Context, picks []models.DraftPick) error
 	GetDraftPicksByDraft(ctx context.Context, draftID uuid.UUID) ([]models.DraftPick, error)
 	MakePick(ctx context.Context, pickRequest repository.MakePickRequest) error
+	CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int, error)
+	ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*repository.Slot, error)
 }
 
 // LeaguesRepository defines what the app layer needs from the leagues repository for validation
@@ -495,4 +498,52 @@ func (a *App) ClearNextDeadline(ctx context.Context, draftID uuid.UUID) error {
 		return fmt.Errorf("failed to clear next deadline: %w", err)
 	}
 	return nil
+}
+
+// CountRemainingPicks returns the number of unpicked slots in a draft
+func (a *App) CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int, error) {
+	// Verify draft exists
+	if _, err := a.repo.GetDraft(ctx, draftID); err != nil {
+		return 0, fmt.Errorf("draft not found: %w", err)
+	}
+
+	count, err := a.pickRepo.CountRemainingPicks(ctx, draftID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count remaining picks: %w", err)
+	}
+	return count, nil
+}
+
+// ClaimNextPickSlot atomically claims the next available pick slot for auto-pick
+func (a *App) ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*repository.Slot, error) {
+	// Verify draft exists and is in progress
+	draft, err := a.repo.GetDraft(ctx, draftID)
+	if err != nil {
+		return nil, fmt.Errorf("draft not found: %w", err)
+	}
+
+	if draft.Status != models.DraftStatusInProgress {
+		return nil, fmt.Errorf("can only claim pick slots for drafts with status %s, current status is %s",
+			models.DraftStatusInProgress, draft.Status)
+	}
+	slot, err := a.pickRepo.ClaimNextPickSlot(ctx, draftID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to claim next pick slot: %w", err)
+	}
+	return slot, nil
+}
+
+// ListAvailablePlayersForDraft returns all players not yet picked in the specified draft
+func (a *App) ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]repository.AvailablePlayer, error) {
+	// Verify draft exists
+	if _, err := a.repo.GetDraft(ctx, draftID); err != nil {
+		return nil, fmt.Errorf("draft not found: %w", err)
+	}
+
+	players, err := a.repo.ListAvailablePlayersForDraft(ctx, draftID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list available players for draft: %w", err)
+	}
+
+	return players, nil
 }

@@ -40,7 +40,6 @@ DELETE FROM draft
 WHERE id = $1
   AND status = 'NOT_STARTED';
 
-
 -- name: FetchNextDeadline :one
 -- Fetch the single soonest deadline across all in-progress drafts.
 SELECT
@@ -83,3 +82,18 @@ SET
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: ListAvailablePlayersForDraft :many
+-- List all players not yet picked in draft $1, ordered by name.
+SELECT
+    p.id,
+    p.full_name,
+    p.team_id
+FROM players p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM draft_picks dp
+    WHERE dp.draft_id  = $1
+      AND dp.player_id = p.id
+)
+ORDER BY p.full_name;

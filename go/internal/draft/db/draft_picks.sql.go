@@ -13,6 +13,41 @@ import (
 	"github.com/lib/pq"
 )
 
+const claimNextPickSlot = `-- name: ClaimNextPickSlot :one
+SELECT dp.id, dp.team_id, dp.overall_pick
+FROM draft_picks dp
+WHERE dp.draft_id = $1
+  AND dp.player_id IS NULL
+ORDER BY dp.overall_pick
+FOR UPDATE SKIP LOCKED
+LIMIT 1
+`
+
+type ClaimNextPickSlotRow struct {
+	ID          uuid.UUID `json:"id"`
+	TeamID      uuid.UUID `json:"team_id"`
+	OverallPick int32     `json:"overall_pick"`
+}
+
+func (q *Queries) ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (ClaimNextPickSlotRow, error) {
+	row := q.db.QueryRowContext(ctx, claimNextPickSlot, draftID)
+	var i ClaimNextPickSlotRow
+	err := row.Scan(&i.ID, &i.TeamID, &i.OverallPick)
+	return i, err
+}
+
+const countRemainingPicks = `-- name: CountRemainingPicks :one
+SELECT COUNT(*) FROM draft_picks
+WHERE draft_id = $1 AND player_id IS NULL
+`
+
+func (q *Queries) CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRemainingPicks, draftID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createDraftPick = `-- name: CreateDraftPick :one
 INSERT INTO draft_picks (
     id,

@@ -76,3 +76,16 @@ UPDATE draft_picks
 SET player_id = $2, picked_at = NOW()
 WHERE id = $1
   AND player_id IS NULL;
+
+-- name: CountRemainingPicks :one
+SELECT COUNT(*) FROM draft_picks
+WHERE draft_id = $1 AND player_id IS NULL;
+
+-- name: ClaimNextPickSlot :one
+SELECT dp.id, dp.team_id, dp.overall_pick
+FROM draft_picks dp
+WHERE dp.draft_id = $1
+  AND dp.player_id IS NULL
+ORDER BY dp.overall_pick
+FOR UPDATE SKIP LOCKED
+LIMIT 1;

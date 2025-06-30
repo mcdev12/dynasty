@@ -155,6 +155,35 @@ func (r *Repository) ClearNextDeadline(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
+type AvailablePlayer struct {
+	ID       uuid.UUID  `json:"id"`
+	FullName string     `json:"full_name"`
+	TeamID   *uuid.UUID `json:"team_id,omitempty"`
+}
+
+func (r *Repository) ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]AvailablePlayer, error) {
+	rows, err := r.queries.ListAvailablePlayersForDraft(ctx, draftID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list available players for draft: %w", err)
+	}
+
+	players := make([]AvailablePlayer, len(rows))
+	for i, row := range rows {
+		var teamID *uuid.UUID
+		if row.TeamID.Valid {
+			teamID = &row.TeamID.UUID
+		}
+		
+		players[i] = AvailablePlayer{
+			ID:       row.ID,
+			FullName: row.FullName,
+			TeamID:   teamID,
+		}
+	}
+
+	return players, nil
+}
+
 func (r *Repository) UpdateDraft(ctx context.Context, id uuid.UUID, req UpdateDraftRequest) (*models.Draft, error) {
 	var settingsBytes []byte
 	var scheduledAt sql.NullTime

@@ -75,7 +75,10 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	draftRepo := repository.NewRepository(draftQueries)
 	draftPickRepo := repository.NewDraftPickRepository(draftQueries, database)
 	draftApp := draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
-	draftOrchestrator := draft.NewOrchestrator(draftApp, int32(100))
+
+	// 1) Create the RandomStrategy, injecting draftApp (which implements ListAvailable… & ClaimNext…)
+	randStrat := draft.NewRandomStrategy(draftApp)
+	draftOrchestrator := draft.NewOrchestrator(draftApp, randStrat, int32(100))
 	draftService := draft.NewService(draftApp, draftOrchestrator)
 
 	return &Services{

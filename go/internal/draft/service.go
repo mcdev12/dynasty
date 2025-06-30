@@ -26,6 +26,9 @@ type DraftApp interface {
 	FetchDraftsDueForPick(ctx context.Context, limit int32) ([]uuid.UUID, error)
 	UpdateNextDeadline(ctx context.Context, draftID uuid.UUID, deadline *time.Time) error
 	ClearNextDeadline(ctx context.Context, id uuid.UUID) error
+	CountRemainingPicks(ctx context.Context, draftID uuid.UUID) (int, error)
+	ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*repository.Slot, error)
+	ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]repository.AvailablePlayer, error)
 }
 
 type DraftOrchestrator interface {
@@ -112,31 +115,31 @@ func (s *Service) UpdateDraft(ctx context.Context, req *connect.Request[draftv1.
 
 	// Build update request
 	updateReq := repository.UpdateDraftRequest{}
-	
+
 	// Handle optional settings update
 	if req.Msg.Settings != nil {
 		settings := s.protoToDraftSettings(req.Msg.Settings)
 		updateReq.Settings = &settings
 	}
-	
+
 	// Handle optional scheduled_at update
 	if req.Msg.ScheduledAt != nil {
 		scheduledAt := req.Msg.ScheduledAt.AsTime()
 		updateReq.ScheduledAt = &scheduledAt
 	}
-	
+
 	// Perform the update
 	draft, err := s.app.UpdateDraft(ctx, id, updateReq)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	
+
 	// Convert response to proto
 	protoDraft, err := s.draftToProto(draft)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	
+
 	return connect.NewResponse(&draftv1.UpdateDraftResponse{
 		Draft: protoDraft,
 	}), nil
