@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,10 +29,19 @@ type Orchestrator struct {
 	strat      AutoPickStrategy // << add this
 	wakeCh     chan struct{}
 	instanceID string // unique ID for this scheduler instance
+
+	// Worker pool configuration
+	numWorkers int
+	workCh     chan uuid.UUID
+	
+	// Track in-flight work to prevent duplicate processing
+	inFlight map[uuid.UUID]bool
+	inFlightMu sync.Mutex
 }
 
-// NewOrchestrator creates a new draft orchestrator
+// NewOrchestrator creates a new draft orchestrator with worker pool
 func NewOrchestrator(app DraftApp, strat AutoPickStrategy, batchSize int32) *Orchestrator {
+	numWorkers := 10 // Start with small pool
 	return &Orchestrator{
 		app:        app,
 		batchSize:  batchSize,
@@ -39,6 +49,10 @@ func NewOrchestrator(app DraftApp, strat AutoPickStrategy, batchSize int32) *Orc
 		clock:      clockwork.NewRealClock(),
 		wakeCh:     make(chan struct{}, 1),
 		instanceID: uuid.New().String()[:8], // short ID for logging
+
+		numWorkers: numWorkers,
+		workCh:     make(chan uuid.UUID, numWorkers*2), // Buffer to prevent blocking
+		inFlight:   make(map[uuid.UUID]bool),
 	}
 }
 
@@ -102,7 +116,27 @@ func (o *Orchestrator) PauseDraft(ctx context.Context, draftID uuid.UUID) error 
 
 // RunScheduler loops forever, sleeping until the next deadline and firing timeouts.
 func (o *Orchestrator) RunScheduler(ctx context.Context) error {
-	log.Info().Str("instance", o.instanceID).Msg("scheduler started")
+	log.Info().Str("instance", o.instanceID).Int("workers", o.numWorkers).Msg("scheduler started")
+	
+	// Start worker pool
+	var wg sync.WaitGroup
+	workerCtx, cancelWorkers := context.WithCancel(ctx)
+	defer cancelWorkers()
+	
+	for i := 0; i < o.numWorkers; i++ {
+		wg.Add(1)
+		go o.worker(workerCtx, &wg, i)
+	}
+	
+	// Ensure workers are cleaned up
+	defer func() {
+		log.Info().Str("instance", o.instanceID).Msg("shutting down workers")
+		cancelWorkers()
+		close(o.workCh)
+		wg.Wait()
+		log.Info().Str("instance", o.instanceID).Msg("all workers shut down")
+	}()
+	
 	timer := o.clock.NewTimer(0)
 	defer timer.Stop()
 
@@ -211,21 +245,28 @@ func (o *Orchestrator) RunScheduler(ctx context.Context) error {
 				Str("instance", o.instanceID).
 				Msg("processing due drafts")
 
-			// Process timeouts sequentially (no worker pool)
+			// Send drafts to worker pool for parallel processing with deduplication
 			for _, draftID := range due {
+				o.inFlightMu.Lock()
+				if o.inFlight[draftID] {
+					// Skip if already being processed
+					log.Debug().Str("draft_id", draftID.String()).Str("instance", o.instanceID).Msg("skipping draft already in flight")
+					o.inFlightMu.Unlock()
+					continue
+				}
+				o.inFlight[draftID] = true
+				o.inFlightMu.Unlock()
+				
 				select {
 				case <-ctx.Done():
-					log.Info().Str("instance", o.instanceID).Msg("shutdown while processing timeouts")
+					// Clean up in-flight tracking on shutdown
+					o.inFlightMu.Lock()
+					delete(o.inFlight, draftID)
+					o.inFlightMu.Unlock()
+					log.Info().Str("instance", o.instanceID).Msg("shutdown while queueing timeouts")
 					return nil
-				default:
-					log.Info().Str("draft_id", draftID.String()).Str("instance", o.instanceID).Msg("handling timeout")
-					if err := o.handleTimeout(ctx, draftID); err != nil {
-						log.Error().
-							Err(err).
-							Str("draft_id", draftID.String()).
-							Str("instance", o.instanceID).
-							Msg("timeout handling failed")
-					}
+				case o.workCh <- draftID:
+					log.Debug().Str("draft_id", draftID.String()).Str("instance", o.instanceID).Msg("queued timeout for worker")
 				}
 			}
 		}
@@ -269,6 +310,55 @@ func (o *Orchestrator) finalizeIfComplete(ctx context.Context, draftID uuid.UUID
 	}
 	return o.app.ClearNextDeadline(ctx, draftID)
 
+}
+
+// worker processes draft timeouts from the work channel
+func (o *Orchestrator) worker(ctx context.Context, wg *sync.WaitGroup, workerID int) {
+	defer wg.Done()
+	
+	log.Info().
+		Str("instance", o.instanceID).
+		Int("worker_id", workerID).
+		Msg("worker started")
+	
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().
+				Str("instance", o.instanceID).
+				Int("worker_id", workerID).
+				Msg("worker shutting down")
+			return
+		case draftID, ok := <-o.workCh:
+			if !ok {
+				log.Info().
+					Str("instance", o.instanceID).
+					Int("worker_id", workerID).
+					Msg("work channel closed, worker shutting down")
+				return
+			}
+			
+			log.Info().
+				Str("draft_id", draftID.String()).
+				Str("instance", o.instanceID).
+				Int("worker_id", workerID).
+				Msg("worker handling timeout")
+			
+			if err := o.handleTimeout(ctx, draftID); err != nil {
+				log.Error().
+					Err(err).
+					Str("draft_id", draftID.String()).
+					Str("instance", o.instanceID).
+					Int("worker_id", workerID).
+					Msg("worker timeout handling failed")
+			}
+			
+			// Clean up in-flight tracking regardless of success/failure
+			o.inFlightMu.Lock()
+			delete(o.inFlight, draftID)
+			o.inFlightMu.Unlock()
+		}
+	}
 }
 
 func (o *Orchestrator) getPickTime(ctx context.Context, draftID uuid.UUID) (time.Duration, error) {
