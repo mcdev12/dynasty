@@ -6,8 +6,9 @@ import LeftSidebar from '../components/LeftSidebar';
 import { DraftUIState, DraftEvent, DraftStatus, CurrentPickState } from '../types/draft';
 import { create } from '@bufbuild/protobuf';
 import { DraftService, GetDraftRequestSchema } from '../genproto/draft/v1/draft_service_pb';
-import { DraftSettingsSchema } from '../genproto/draft/v1/draft_pb';
+import { DraftSettingsSchema, DraftPickSchema } from '../genproto/draft/v1/draft_pb';
 import { FantasyTeamService, GetFantasyTeamsByLeagueRequestSchema } from '../genproto/fantasyteam/v1/service_pb';
+import { PlayerService, GetPlayerRequestSchema } from '../genproto/player/v1/service_pb';
 import { createClient } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import { useDraftWebSocket } from '../hooks/useDraftWebSocket';
@@ -21,10 +22,44 @@ const transport = createConnectTransport({
 });
 const draftClient = createClient(DraftService, transport);
 const fantasyTeamClient = createClient(FantasyTeamService, transport);
+const playerClient = createClient(PlayerService, transport);
 
 export default function DraftScreen() {
   const [draftState, setDraftState] = useState<DraftUIState | null>(null);
   const { connected, sendMessage } = useDraftWebSocket(DRAFT_ID, USER_ID, handleDraftEvent);
+
+  // Helper function to calculate which team should pick based on overall pick number (snake draft)
+  const getCorrectSnakeTeam = (overallPick: number) => {
+    const teams = draftState?.teams || [];
+    if (teams.length === 0) return '';
+    
+    const totalTeams = teams.length;
+    const round = Math.ceil(overallPick / totalTeams);
+    const pickInRound = ((overallPick - 1) % totalTeams) + 1;
+    
+    // Snake draft: odd rounds go left-to-right, even rounds go right-to-left
+    const isEvenRound = round % 2 === 0;
+    let teamIndex;
+    if (isEvenRound) {
+      // Even round: reverse order (last team from previous round picks first)
+      teamIndex = totalTeams - pickInRound; // This gives: pick1->index4, pick2->index3, etc.
+    } else {
+      // Odd round: normal order (first team picks first)
+      teamIndex = pickInRound - 1; // This gives: pick1->index0, pick2->index1, etc.
+    }
+    
+    // Ensure teamIndex is within bounds
+    if (teamIndex < 0 || teamIndex >= totalTeams) {
+      console.log(`ERROR: teamIndex ${teamIndex} out of bounds for ${totalTeams} teams`);
+      teamIndex = 0;
+    }
+    
+    console.log(`Snake calculation: Overall=${overallPick}, Round=${round}, PickInRound=${pickInRound}, IsEven=${isEvenRound}, TeamIndex=${teamIndex}`);
+    console.log(`Available teams:`, teams.map(t => ({ id: t.id, name: t.name })));
+    console.log(`Selected team:`, teams[teamIndex]);
+    
+    return teams[teamIndex]?.id || '';
+  };
 
   useEffect(() => {
     fetchDraftData();
@@ -64,6 +99,7 @@ export default function DraftScreen() {
       
       console.log('Draft order:', draftOrder);
       console.log('Ordered teams:', orderedTeams);
+      console.log('Draft order team IDs:', draftOrder);
       
       // Map teams to UI format
       const uiTeams = orderedTeams.map(team => ({
@@ -89,8 +125,9 @@ export default function DraftScreen() {
         currentPick: undefined,
         // Populated arrays
         teams: uiTeams,
-        picks: [], // Will be populated by GetDraftPicks
+        picks: [], // Will be populated by WebSocket events
         availablePlayers: [], // Will be populated by GetAvailablePlayers
+        playersById: new Map(), // Will be populated as players are fetched
       };
       
       console.log('Mapped draft state:', mappedState);
@@ -100,6 +137,65 @@ export default function DraftScreen() {
     }
   };
 
+  const handlePickMade = async (pickData: any) => {
+    try {
+      console.log('handlePickMade called with pickData:', pickData);
+      
+      // Fetch player details
+      const playerResponse = await playerClient.getPlayer(
+        create(GetPlayerRequestSchema, { id: pickData.PlayerID })
+      );
+
+      if (!playerResponse.player) {
+        console.error('Player not found:', pickData.PlayerID);
+        return;
+      }
+
+      const player = playerResponse.player;
+      console.log('Fetched player details:', player);
+
+      // Calculate round and pick from overall pick number
+      const overallPick = pickData.Overall || 1;
+      const totalTeams = draftState?.metadata.total_teams || 12;
+      const round = Math.ceil(overallPick / totalTeams);
+      const pickInRound = ((overallPick - 1) % totalTeams) + 1;
+      
+      // Try to calculate correct snake draft team, fallback to backend
+      const correctTeamId = getCorrectSnakeTeam(overallPick);
+      const finalTeamId = correctTeamId || pickData.TeamID;
+      
+      console.log(`Pick details: Overall=${overallPick}, Round=${round}, PickInRound=${pickInRound}`);
+      console.log(`Team override: Backend=${pickData.TeamID}, Correct=${correctTeamId}, Final=${finalTeamId}`);
+
+      // Create pick with player details - use calculated team or fallback
+      const newPick = create(DraftPickSchema, {
+        id: pickData.PickID,
+        draftId: DRAFT_ID,
+        round: round,
+        pick: pickInRound,
+        overallPick: overallPick,
+        teamId: finalTeamId,
+        playerId: pickData.PlayerID,
+        pickedAt: pickData.PickedAt ? { seconds: BigInt(Math.floor(new Date(pickData.PickedAt).getTime() / 1000)), nanos: 0 } : undefined,
+        keeperPick: pickData.KeeperPick || false,
+        auctionAmount: pickData.AuctionAmount,
+      });
+
+      console.log('Created pick object:', newPick);
+
+      // Update picks state and add player to map
+      setDraftState(prev => prev ? {
+        ...prev,
+        picks: [...prev.picks.filter(p => p.id !== newPick.id), newPick],
+        playersById: new Map([...prev.playersById, [player.id, player]])
+      } : null);
+      
+      console.log('Updated draft state with new pick');
+      
+    } catch (error) {
+      console.error('Failed to fetch player details for pick:', error);
+    }
+  };
 
   function handleDraftEvent(event: any) {
     console.log('Draft event:', event);
@@ -107,11 +203,21 @@ export default function DraftScreen() {
     switch (event.type) {
       case 'PickStarted':
         if (event.data?.started_at && event.data?.time_per_pick_sec) {
+          // Calculate round and pick from overall pick number
+          const overallPick = event.data.overall_pick || 1;
+          const totalTeams = draftState?.metadata.total_teams || 12;
+          const round = Math.ceil(overallPick / totalTeams);
+          const pickInRound = ((overallPick - 1) % totalTeams) + 1;
+          
+          // Try to calculate correct snake draft team, fallback to backend
+          const correctTeamId = getCorrectSnakeTeam(overallPick);
+          const teamId = correctTeamId || event.data.team_id || '';
+          
           const newCurrentPick: CurrentPickState = {
-            teamId: event.data.team_id || '',
-            round: event.data.round || 1,
-            pickNumber: event.data.pick || 1,
-            overallPick: event.data.overall_pick || 1,
+            teamId: teamId,
+            round: round,
+            pickNumber: pickInRound,
+            overallPick: overallPick,
             startedAt: event.data.started_at,
             timePerPickSec: event.data.time_per_pick_sec,
           };
@@ -126,8 +232,18 @@ export default function DraftScreen() {
         break;
         
       case 'PickMade':
-        // Refetch state to get updated picks
-        fetchDraftData();
+        // Add the pick directly to state from WebSocket data and fetch player details
+        console.log('PickMade event data:', event.data);
+        if (event.data?.PickID && event.data?.PlayerID) {
+          console.log('Calling handlePickMade with:', event.data);
+          handlePickMade(event.data);
+        } else {
+          console.log('Missing PickID or PlayerID in PickMade event:', {
+            PickID: event.data?.PickID,
+            PlayerID: event.data?.PlayerID,
+            full_data: event.data
+          });
+        }
         break;
         
       case 'PickEnded':
@@ -212,6 +328,7 @@ export default function DraftScreen() {
               thirdRoundReversal: false,
             })}
             draftType={draftState.metadata.draft_type}
+            playersById={draftState.playersById || new Map()}
           />
         </View>
       </View>

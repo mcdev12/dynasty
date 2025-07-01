@@ -74,6 +74,9 @@ export interface DraftUIState {
   teams: Team[];
   picks: DraftPick[];
   availablePlayers: EnrichedPlayer[];
+  
+  // Player details map for quick lookup
+  playersById: Map<string, Player>;
 }
 
 export interface DraftEvent {

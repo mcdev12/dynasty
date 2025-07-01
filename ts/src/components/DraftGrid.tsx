@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Animated } from 'react-native';
-import { Team, DraftPick, CurrentPickState, DraftSettings, DraftType, POSITION_COLORS } from '../types/draft';
+import { View, Text, ScrollView, StyleSheet, Animated, Platform } from 'react-native';
+import { Team, DraftPick, CurrentPickState, DraftSettings, DraftType, POSITION_COLORS, Player } from '../types/draft';
 
 interface DraftGridProps {
   teams: Team[];
@@ -8,9 +8,10 @@ interface DraftGridProps {
   currentPick?: CurrentPickState;
   settings: DraftSettings;
   draftType: DraftType;
+  playersById: Map<string, Player>;
 }
 
-export default function DraftGrid({ teams, picks, currentPick, settings, draftType }: DraftGridProps) {
+export default function DraftGrid({ teams, picks, currentPick, settings, draftType, playersById }: DraftGridProps) {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   React.useEffect(() => {
@@ -39,6 +40,169 @@ export default function DraftGrid({ teams, picks, currentPick, settings, draftTy
     return currentPick.round === round && currentPick.teamId === teamId;
   };
 
+  // Use native web table for better layout on web
+  if (Platform.OS === 'web') {
+    return (
+      <div style={{ 
+        flex: 1, 
+        overflow: 'auto', 
+        backgroundColor: '#131920',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <table style={{ 
+          borderCollapse: 'collapse', 
+          width: '100%',
+          minWidth: 'fit-content'
+        }}>
+          {/* Header Row */}
+          <thead>
+            <tr style={{ backgroundColor: '#0f1419', borderBottom: '1px solid #2d3748' }}>
+              <th style={{ 
+                width: '60px', 
+                height: '80px',
+                backgroundColor: '#1a1f2e',
+                border: '1px solid #2d3748',
+                color: '#a0aec0',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}>
+                Round
+              </th>
+              {teams.map((team) => (
+                <th key={team.id} style={{ 
+                  width: '160px', 
+                  height: '80px',
+                  padding: '10px',
+                  textAlign: 'center',
+                  backgroundColor: '#0f1419',
+                  borderBottom: `3px solid ${team.color}`,
+                  border: '1px solid #2d3748',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: 'bold'
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{team.avatar}</div>
+                  <div>{team.name}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          
+          {/* Grid Body */}
+          <tbody>
+            {Array.from({ length: settings.rounds }, (_, i) => i + 1).map((round) => (
+              <tr key={round} style={{ borderBottom: '1px solid #2d3748' }}>
+                <td style={{ 
+                  width: '60px',
+                  height: '60px',
+                  backgroundColor: '#1a1f2e',
+                  textAlign: 'center',
+                  border: '1px solid #2d3748',
+                  color: '#a0aec0',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}>
+                  R{round}
+                </td>
+                {teams.map((team) => {
+                  const pick = getPickForCell(round, team.id);
+                  const isCurrentPick = isCurrentPickCell(round, team.id);
+
+                  return (
+                    <td key={`${round}-${team.id}`} style={{ 
+                      width: '160px',
+                      minHeight: '60px',
+                      padding: '8px',
+                      border: '1px solid #2d3748',
+                      backgroundColor: pick ? `${team.color}26` : 'transparent',
+                      borderColor: isCurrentPick ? '#22c55e' : '#2d3748',
+                      borderWidth: isCurrentPick ? '2px' : '1px',
+                      textAlign: 'center',
+                      verticalAlign: 'middle'
+                    }}>
+                      {isCurrentPick && !pick && (
+                        <div>
+                          <div style={{ 
+                            color: '#22c55e', 
+                            fontSize: '10px', 
+                            fontWeight: 'bold',
+                            marginBottom: '4px'
+                          }}>
+                            ON CLOCK
+                          </div>
+                          <div style={{ 
+                            width: '8px', 
+                            height: '8px', 
+                            borderRadius: '50%',
+                            backgroundColor: '#22c55e',
+                            margin: '0 auto',
+                            animation: 'pulse 1s infinite'
+                          }} />
+                        </div>
+                      )}
+                      {pick && (
+                        <div>
+                          <div style={{ 
+                            color: '#ffffff', 
+                            fontSize: '12px', 
+                            fontWeight: 'bold',
+                            marginBottom: '2px'
+                          }}>
+                            {playersById.get(pick.playerId)?.fullName || pick.playerId || 'Player'}
+                          </div>
+                          {(() => {
+                            const player = playersById.get(pick.playerId);
+                            const playerProfile = player?.profile?.case === 'playerProfile' ? player.profile.value : null;
+                            const nflProfile = playerProfile?.profile?.case === 'nflProfile' ? playerProfile.profile.value : null;
+                            return (
+                              <div style={{ fontSize: '10px', color: '#a0aec0', marginBottom: '4px' }}>
+                                {nflProfile?.position && (
+                                  <div style={{ 
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    backgroundColor: POSITION_COLORS[nflProfile.position as keyof typeof POSITION_COLORS] || '#6b7280',
+                                    color: '#ffffff',
+                                    fontSize: '10px',
+                                    fontWeight: 'bold',
+                                    display: 'inline-block',
+                                    marginRight: '4px'
+                                  }}>
+                                    {nflProfile.position}
+                                  </div>
+                                )}
+                                {nflProfile?.jerseyNumber && (
+                                  <span style={{ marginRight: '4px' }}>#{nflProfile.jerseyNumber}</span>
+                                )}
+                                {nflProfile?.college && (
+                                  <div style={{ fontSize: '9px', marginTop: '2px' }}>{nflProfile.college}</div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                      {!pick && !isCurrentPick && (
+                        <div style={{ color: '#4a5568', fontSize: '16px' }}>—</div>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        
+        <style>{`
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  // Fallback to React Native components for mobile
   return (
     <ScrollView horizontal style={styles.container}>
       <View style={styles.grid}>
@@ -83,12 +247,29 @@ export default function DraftGrid({ teams, picks, currentPick, settings, draftTy
                     {pick && (
                       <>
                         <Text style={styles.playerName} numberOfLines={1}>
-                          {pick.playerId || 'Player'}
+                          {playersById.get(pick.playerId)?.fullName || pick.playerId || 'Player'}
                         </Text>
                         <View style={styles.pickInfo}>
-                          <View style={[styles.positionBadge, { backgroundColor: POSITION_COLORS.QB }]}>
-                            <Text style={styles.positionText}>TBD</Text>
-                          </View>
+                          {(() => {
+                            const player = playersById.get(pick.playerId);
+                            const playerProfile = player?.profile?.case === 'playerProfile' ? player.profile.value : null;
+                            const nflProfile = playerProfile?.profile?.case === 'nflProfile' ? playerProfile.profile.value : null;
+                            const position = nflProfile?.position || 'TBD';
+                            
+                            return (
+                              <>
+                                <View style={[styles.positionBadge, { backgroundColor: POSITION_COLORS[position as keyof typeof POSITION_COLORS] || '#6b7280' }]}>
+                                  <Text style={styles.positionText}>{position}</Text>
+                                </View>
+                                {nflProfile?.jerseyNumber && (
+                                  <Text style={styles.jerseyNumber}>#{nflProfile.jerseyNumber}</Text>
+                                )}
+                                {nflProfile?.college && (
+                                  <Text style={styles.collegeText} numberOfLines={1}>{nflProfile.college}</Text>
+                                )}
+                              </>
+                            );
+                          })()}
                         </View>
                       </>
                     )}
@@ -214,5 +395,15 @@ const styles = StyleSheet.create({
     color: '#4a5568',
     fontSize: 16,
     textAlign: 'center',
+  },
+  jerseyNumber: {
+    color: '#a0aec0',
+    fontSize: 10,
+    marginLeft: 4,
+  },
+  collegeText: {
+    color: '#a0aec0',
+    fontSize: 9,
+    marginTop: 2,
   },
 });
