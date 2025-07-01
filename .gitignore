@@ -33,3 +33,5 @@ go.work.sum
 
 # Genproto
 go/internal/genproto/
+ts/src/genproto/
+ts/src/node_modules/

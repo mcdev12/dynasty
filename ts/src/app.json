@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Dynasty Draft",
+    "slug": "dynasty-draft",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0f1419",
+    "splash": {
+      "backgroundColor": "#0f1419"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
