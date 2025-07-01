@@ -3,88 +3,103 @@ import { View, Text, StyleSheet } from 'react-native';
 import DraftGrid from '../components/DraftGrid';
 import DraftTimer from '../components/DraftTimer';
 import LeftSidebar from '../components/LeftSidebar';
-import { DraftUIState, DraftGatewayStateResponse, DraftEvent, DraftStatus, DraftType, DraftSettings } from '../types/draft';
+import { DraftUIState, DraftEvent, DraftStatus, CurrentPickState } from '../types/draft';
 import { create } from '@bufbuild/protobuf';
+import { DraftService, GetDraftRequestSchema } from '../genproto/draft/v1/draft_service_pb';
 import { DraftSettingsSchema } from '../genproto/draft/v1/draft_pb';
+import { FantasyTeamService, GetFantasyTeamsByLeagueRequestSchema } from '../genproto/fantasyteam/v1/service_pb';
+import { createClient } from '@connectrpc/connect';
+import { createConnectTransport } from '@connectrpc/connect-web';
 import { useDraftWebSocket } from '../hooks/useDraftWebSocket';
 
 const DRAFT_ID = 'e6a3e117-e1d0-49bb-8d64-fb0d9217c230'; // TODO: Get from navigation/props
 const USER_ID = '667f2190-b9bc-48e2-8683-963b62ac5428'; // TODO: Get from auth/context
+
+// Create Connect client
+const transport = createConnectTransport({
+  baseUrl: 'http://localhost:8080', // Your Connect RPC server
+});
+const draftClient = createClient(DraftService, transport);
+const fantasyTeamClient = createClient(FantasyTeamService, transport);
 
 export default function DraftScreen() {
   const [draftState, setDraftState] = useState<DraftUIState | null>(null);
   const { connected, sendMessage } = useDraftWebSocket(DRAFT_ID, USER_ID, handleDraftEvent);
 
   useEffect(() => {
-    fetchDraftState();
+    fetchDraftData();
   }, []);
 
-  const fetchDraftState = async () => {
+  const fetchDraftData = async () => {
     try {
-      console.log('Fetching draft state from:', `http://localhost:8081/api/drafts/${DRAFT_ID}/state`);
-      const response = await fetch(`http://localhost:8081/api/drafts/${DRAFT_ID}/state`);
-      console.log('Response status:', response.status);
+      console.log('Fetching draft data via RPC for draft:', DRAFT_ID);
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Call GetDraft RPC
+      const draftResponse = await draftClient.getDraft(
+        create(GetDraftRequestSchema, { draftId: DRAFT_ID })
+      );
+      
+      if (!draftResponse.draft) {
+        throw new Error('No draft data returned');
       }
       
-      const rawData: DraftGatewayStateResponse = await response.json();
-      console.log('Raw gateway response:', rawData);
+      const draft = draftResponse.draft;
+      console.log('Draft RPC response:', draft);
       
-      // Map gateway response to UI state
+      // Fetch fantasy teams for this league
+      const teamsResponse = await fantasyTeamClient.getFantasyTeamsByLeague(
+        create(GetFantasyTeamsByLeagueRequestSchema, { leagueId: draft.leagueId })
+      );
+      
+      console.log('Fantasy teams response:', teamsResponse.fantasyTeams);
+      
+      // Map teams and order them by draft order
+      const draftOrder = draft.settings?.draftOrder || [];
+      const teamsById = new Map(teamsResponse.fantasyTeams.map(team => [team.id, team]));
+      
+      // Order teams according to draft order, or use original order if no draft order
+      const orderedTeams = draftOrder.length > 0 
+        ? draftOrder.map(teamId => teamsById.get(teamId)).filter(Boolean)
+        : teamsResponse.fantasyTeams;
+      
+      console.log('Draft order:', draftOrder);
+      console.log('Ordered teams:', orderedTeams);
+      
+      // Map teams to UI format
+      const uiTeams = orderedTeams.map(team => ({
+        id: team!.id,
+        name: team!.name,
+        avatar: team!.logoUrl ? '🏈' : '👤', // Use emoji for now
+        color: '#3b82f6', // Default color for now
+      }));
+      
+      // Map proto response to UI state
       const mappedState: DraftUIState = {
-        draft_id: rawData.draft_id,
-        status: mapStringToDraftStatus(rawData.status),
+        draft_id: draft.id,
+        status: draft.status,
         metadata: {
-          draft_type: mapStringToDraftType(rawData.metadata.draft_type),
-          league_id: rawData.metadata.league_id,
-          total_rounds: rawData.metadata.total_rounds,
-          total_teams: rawData.metadata.total_teams,
+          draft_type: draft.draftType,
+          league_id: draft.leagueId,
+          total_rounds: draft.settings?.rounds || 12,
+          total_teams: draft.settings?.draftOrder?.length || 12,
         },
-        // Map current pick if available
-        currentPick: rawData.current_pick ? {
-          teamId: rawData.current_pick.team_id,
-          round: rawData.current_pick.round,
-          pickNumber: rawData.current_pick.pick,
-          overallPick: rawData.current_pick.overall_pick,
-          startedAt: rawData.current_pick.started_at,
-          timePerPickSec: rawData.current_pick.time_per_pick_sec,
-        } : undefined,
-        // Initialize empty arrays for now - these will be populated from other endpoints
-        teams: [],
-        picks: [],
-        availablePlayers: [],
+        // Include actual draft settings
+        settings: draft.settings,
+        // No current pick from GetDraft - will come from WebSocket events
+        currentPick: undefined,
+        // Populated arrays
+        teams: uiTeams,
+        picks: [], // Will be populated by GetDraftPicks
+        availablePlayers: [], // Will be populated by GetAvailablePlayers
       };
       
-      console.log('Mapped state:', mappedState);
+      console.log('Mapped draft state:', mappedState);
       setDraftState(mappedState);
-      console.log('Draft state currentPick:', mappedState.currentPick);
     } catch (error) {
-      console.error('Failed to fetch draft state:', error);
+      console.error('Failed to fetch draft data:', error);
     }
   };
 
-  // Helper functions to map string values to enums
-  const mapStringToDraftStatus = (status: string): DraftStatus => {
-    switch (status) {
-      case 'NOT_STARTED': return DraftStatus.NOT_STARTED;
-      case 'IN_PROGRESS': return DraftStatus.IN_PROGRESS;
-      case 'PAUSED': return DraftStatus.PAUSED;
-      case 'COMPLETED': return DraftStatus.COMPLETED;
-      case 'CANCELLED': return DraftStatus.CANCELLED;
-      default: return DraftStatus.UNSPECIFIED;
-    }
-  };
-
-  const mapStringToDraftType = (type: string): DraftType => {
-    switch (type) {
-      case 'SNAKE': return DraftType.SNAKE;
-      case 'AUCTION': return DraftType.AUCTION;
-      case 'ROOKIE': return DraftType.ROOKIE;
-      default: return DraftType.UNSPECIFIED;
-    }
-  };
 
   function handleDraftEvent(event: any) {
     console.log('Draft event:', event);
@@ -112,7 +127,7 @@ export default function DraftScreen() {
         
       case 'PickMade':
         // Refetch state to get updated picks
-        fetchDraftState();
+        fetchDraftData();
         break;
         
       case 'PickEnded':
@@ -146,7 +161,7 @@ export default function DraftScreen() {
         
       default:
         // For unknown events, refetch state
-        fetchDraftState();
+        fetchDraftData();
     }
   }
 
@@ -190,10 +205,10 @@ export default function DraftScreen() {
             teams={draftState.teams || []}
             picks={draftState.picks || []}
             currentPick={draftState.currentPick}
-            settings={create(DraftSettingsSchema, {
+            settings={draftState.settings || create(DraftSettingsSchema, {
               rounds: draftState.metadata.total_rounds,
-              timePerPickSec: 120, // Default - will need to get from actual settings
-              draftOrder: [], // Will need to populate
+              timePerPickSec: 120,
+              draftOrder: [],
               thirdRoundReversal: false,
             })}
             draftType={draftState.metadata.draft_type}

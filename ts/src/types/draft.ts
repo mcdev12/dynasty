@@ -56,7 +56,7 @@ export interface DraftGatewayStateResponse {
 
 // UI State format (what we use in components) 
 export interface DraftUIState {
-  // Basic draft info from gateway response
+  // Basic draft info from GetDraft response
   draft_id: string;
   status: DraftStatus;
   metadata: {
@@ -65,6 +65,9 @@ export interface DraftUIState {
     total_rounds: number;
     total_teams: number;
   };
+  
+  // Draft settings from GetDraft
+  settings?: DraftSettings;
   
   // Additional UI data (to be populated)
   currentPick?: CurrentPickState;

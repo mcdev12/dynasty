@@ -10,12 +10,14 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.6.0",
+    "@connectrpc/connect": "^2.0.2",
+    "@connectrpc/connect-web": "^2.0.2",
+    "@expo/metro-runtime": "~5.0.4",
     "expo": "~53.0.13",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.4",
-    "react-native-web": "~0.20.0",
-    "@expo/metro-runtime": "~5.0.4"
+    "react-native-web": "~0.20.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
