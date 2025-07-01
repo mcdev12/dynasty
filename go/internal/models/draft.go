@@ -39,14 +39,15 @@ type DraftSettings struct {
 
 // Draft represents a draft instance.
 type Draft struct {
-	ID          uuid.UUID     `json:"id"`
-	LeagueID    uuid.UUID     `json:"league_id"`
-	DraftType   DraftType     `json:"draft_type"`
-	Status      DraftStatus   `json:"status"`
-	Settings    DraftSettings `json:"settings"`
-	ScheduledAt *time.Time    `json:"scheduled_at,omitempty"`
-	StartedAt   *time.Time    `json:"started_at,omitempty"`
-	CompletedAt *time.Time    `json:"completed_at,omitempty"`
-	CreatedAt   time.Time     `json:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at"`
+	ID           uuid.UUID     `json:"id"`
+	LeagueID     uuid.UUID     `json:"league_id"`
+	DraftType    DraftType     `json:"draft_type"`
+	Status       DraftStatus   `json:"status"`
+	Settings     DraftSettings `json:"settings"`
+	ScheduledAt  *time.Time    `json:"scheduled_at,omitempty"`
+	StartedAt    *time.Time    `json:"started_at,omitempty"`
+	CompletedAt  *time.Time    `json:"completed_at,omitempty"`
+	CreatedAt    time.Time     `json:"created_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+	NextDeadline *time.Time    `json:"next_deadline,omitempty"`
 }

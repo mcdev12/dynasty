@@ -37,7 +37,7 @@ type UpdateDraftStatusRequest struct {
 
 type UpdateDraftRequest struct {
 	Settings    *models.DraftSettings `json:"settings"`
-	ScheduledAt *time.Time           `json:"scheduled_at"`
+	ScheduledAt *time.Time            `json:"scheduled_at"`
 }
 
 func (r *Repository) CreateDraft(ctx context.Context, req CreateDraftRequest) (*models.Draft, error) {
@@ -173,7 +173,7 @@ func (r *Repository) ListAvailablePlayersForDraft(ctx context.Context, draftID u
 		if row.TeamID.Valid {
 			teamID = &row.TeamID.UUID
 		}
-		
+
 		players[i] = AvailablePlayer{
 			ID:       row.ID,
 			FullName: row.FullName,
@@ -187,7 +187,7 @@ func (r *Repository) ListAvailablePlayersForDraft(ctx context.Context, draftID u
 func (r *Repository) UpdateDraft(ctx context.Context, id uuid.UUID, req UpdateDraftRequest) (*models.Draft, error) {
 	var settingsBytes []byte
 	var scheduledAt sql.NullTime
-	
+
 	// Handle settings update
 	if req.Settings != nil {
 		var err error
@@ -196,12 +196,12 @@ func (r *Repository) UpdateDraft(ctx context.Context, id uuid.UUID, req UpdateDr
 			return nil, fmt.Errorf("failed to marshal draft settings: %w", err)
 		}
 	}
-	
+
 	// Handle scheduled_at update
 	if req.ScheduledAt != nil {
 		scheduledAt = sql.NullTime{Time: *req.ScheduledAt, Valid: true}
 	}
-	
+
 	draft, err := r.queries.UpdateDraft(ctx, db.UpdateDraftParams{
 		ID:          id,
 		Settings:    settingsBytes,
@@ -210,7 +210,7 @@ func (r *Repository) UpdateDraft(ctx context.Context, id uuid.UUID, req UpdateDr
 	if err != nil {
 		return nil, fmt.Errorf("failed to update draft: %w", err)
 	}
-	
+
 	return r.dbDraftToModel(draft), nil
 }
 
@@ -221,7 +221,7 @@ func (r *Repository) dbDraftToModel(dbDraft db.Draft) *models.Draft {
 		settings = models.DraftSettings{}
 	}
 
-	var scheduledAt, startedAt, completedAt *time.Time
+	var scheduledAt, startedAt, completedAt, nextDeadline *time.Time
 	if dbDraft.ScheduledAt.Valid {
 		scheduledAt = &dbDraft.ScheduledAt.Time
 	}
@@ -231,17 +231,21 @@ func (r *Repository) dbDraftToModel(dbDraft db.Draft) *models.Draft {
 	if dbDraft.CompletedAt.Valid {
 		completedAt = &dbDraft.CompletedAt.Time
 	}
+	if dbDraft.NextDeadline.Valid {
+		nextDeadline = &dbDraft.NextDeadline.Time
+	}
 
 	return &models.Draft{
-		ID:          dbDraft.ID,
-		LeagueID:    dbDraft.LeagueID,
-		DraftType:   models.DraftType(dbDraft.DraftType),
-		Status:      models.DraftStatus(dbDraft.Status),
-		Settings:    settings,
-		ScheduledAt: scheduledAt,
-		StartedAt:   startedAt,
-		CompletedAt: completedAt,
-		CreatedAt:   dbDraft.CreatedAt,
-		UpdatedAt:   dbDraft.UpdatedAt,
+		ID:           dbDraft.ID,
+		LeagueID:     dbDraft.LeagueID,
+		DraftType:    models.DraftType(dbDraft.DraftType),
+		Status:       models.DraftStatus(dbDraft.Status),
+		Settings:     settings,
+		ScheduledAt:  scheduledAt,
+		StartedAt:    startedAt,
+		CompletedAt:  completedAt,
+		CreatedAt:    dbDraft.CreatedAt,
+		UpdatedAt:    dbDraft.UpdatedAt,
+		NextDeadline: nextDeadline,
 	}
 }

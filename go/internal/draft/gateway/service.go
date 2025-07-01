@@ -14,6 +14,8 @@ type Service struct {
 	connectionManager *ConnectionManager
 	wsHandler         *WebSocketHandler
 	eventConsumer     *EventConsumer
+	stateHandler      *StateHandler
+	stateProvider     StateProvider
 }
 
 // Config holds configuration for the draft gateway service
@@ -31,7 +33,7 @@ func DefaultConfig() Config {
 }
 
 // NewService creates a new draft gateway service
-func NewService(config Config) (*Service, error) {
+func NewService(config Config, stateProvider StateProvider) (*Service, error) {
 	// Create connection manager
 	connectionManager := NewConnectionManager(config.ConnectionConfig)
 
@@ -44,10 +46,15 @@ func NewService(config Config) (*Service, error) {
 		return nil, fmt.Errorf("failed to create event consumer: %w", err)
 	}
 
+	// Create state handler
+	stateHandler := NewStateHandler(stateProvider)
+
 	return &Service{
 		connectionManager: connectionManager,
 		wsHandler:         wsHandler,
 		eventConsumer:     eventConsumer,
+		stateHandler:      stateHandler,
+		stateProvider:     stateProvider,
 	}, nil
 }
 
@@ -87,6 +94,7 @@ func (s *Service) Stop() error {
 // RegisterRoutes registers the WebSocket HTTP routes
 func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	s.wsHandler.RegisterRoutes(mux)
+	s.stateHandler.RegisterStateRoutes(mux)
 	log.Info().Msg("draft gateway routes registered")
 }
 
@@ -118,7 +126,10 @@ func IntegrationExample() {
 		gatewayConfig := gateway.DefaultConfig()
 		gatewayConfig.JetStreamConfig.URL = "nats://localhost:4222" // Or from env/config
 
-		draftGateway, err := gateway.NewService(gatewayConfig)
+		// Create state provider using the draft app
+		stateProvider := gateway.NewDraftStateProvider(services.Draft.app)
+
+		draftGateway, err := gateway.NewService(gatewayConfig, stateProvider)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to create draft gateway")
 		}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mcdev12/dynasty/go/internal/draft/events"
 )
 
 // DraftEvent represents the base structure for all draft events
@@ -29,62 +30,7 @@ const (
 	EventTypeTimerTick     EventType = "TimerTick"
 )
 
-// Event Payloads
-
-// PickMadePayload contains data for when a pick is completed
-type PickMadePayload struct {
-	PickID      string    `json:"pick_id"`
-	PlayerID    string    `json:"player_id"`
-	TeamID      string    `json:"team_id"`
-	Round       int       `json:"round"`
-	Pick        int       `json:"pick"`
-	OverallPick int       `json:"overall_pick"`
-	PlayerName  string    `json:"player_name"`
-	TeamName    string    `json:"team_name"`
-	PickedAt    time.Time `json:"picked_at"`
-}
-
-// PickStartedPayload contains data for when a pick timer begins
-type PickStartedPayload struct {
-	PickID         string    `json:"pick_id"`
-	TeamID         string    `json:"team_id"`
-	Round          int       `json:"round"`
-	Pick           int       `json:"pick"`
-	OverallPick    int       `json:"overall_pick"`
-	StartedAt      time.Time `json:"started_at"`
-	TimeoutAt      time.Time `json:"timeout_at"`
-	TimePerPickSec int       `json:"time_per_pick_sec"`
-}
-
-// DraftStartedPayload contains data for when a draft begins
-type DraftStartedPayload struct {
-	DraftID     string    `json:"draft_id"`
-	DraftType   string    `json:"draft_type"`
-	StartedAt   time.Time `json:"started_at"`
-	TotalRounds int       `json:"total_rounds"`
-	TotalPicks  int       `json:"total_picks"`
-}
-
-// DraftPausedPayload contains data for when a draft is paused
-type DraftPausedPayload struct {
-	DraftID  string    `json:"draft_id"`
-	PausedAt time.Time `json:"paused_at"`
-	Reason   string    `json:"reason,omitempty"`
-}
-
-// DraftResumedPayload contains data for when a draft is resumed
-type DraftResumedPayload struct {
-	DraftID   string    `json:"draft_id"`
-	ResumedAt time.Time `json:"resumed_at"`
-}
-
-// DraftCompletedPayload contains data for when a draft ends
-type DraftCompletedPayload struct {
-	DraftID     string    `json:"draft_id"`
-	CompletedAt time.Time `json:"completed_at"`
-	Duration    string    `json:"duration"`
-	TotalPicks  int       `json:"total_picks"`
-}
+// Event Payloads are now in the events package to avoid cyclic imports
 
 // TimerTickPayload contains periodic timer updates (optional)
 type TimerTickPayload struct {
@@ -97,7 +43,7 @@ type TimerTickPayload struct {
 // Helper functions to create events
 
 // NewPickMadeEvent creates a new PickMade event
-func NewPickMadeEvent(draftID uuid.UUID, payload PickMadePayload) (*DraftEvent, error) {
+func NewPickMadeEvent(draftID uuid.UUID, payload events.PickMadePayload) (*DraftEvent, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -113,7 +59,7 @@ func NewPickMadeEvent(draftID uuid.UUID, payload PickMadePayload) (*DraftEvent, 
 }
 
 // NewPickStartedEvent creates a new PickStarted event
-func NewPickStartedEvent(draftID uuid.UUID, payload PickStartedPayload) (*DraftEvent, error) {
+func NewPickStartedEvent(draftID uuid.UUID, payload events.PickStartedPayload) (*DraftEvent, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -129,7 +75,7 @@ func NewPickStartedEvent(draftID uuid.UUID, payload PickStartedPayload) (*DraftE
 }
 
 // NewDraftStartedEvent creates a new DraftStarted event
-func NewDraftStartedEvent(draftID uuid.UUID, payload DraftStartedPayload) (*DraftEvent, error) {
+func NewDraftStartedEvent(draftID uuid.UUID, payload events.DraftStartedPayload) (*DraftEvent, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -145,7 +91,7 @@ func NewDraftStartedEvent(draftID uuid.UUID, payload DraftStartedPayload) (*Draf
 }
 
 // NewDraftCompletedEvent creates a new DraftCompleted event
-func NewDraftCompletedEvent(draftID uuid.UUID, payload DraftCompletedPayload) (*DraftEvent, error) {
+func NewDraftCompletedEvent(draftID uuid.UUID, payload events.DraftCompletedPayload) (*DraftEvent, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -164,42 +110,42 @@ func NewDraftCompletedEvent(draftID uuid.UUID, payload DraftCompletedPayload) (*
 func ParseEventPayload(event *DraftEvent) (interface{}, error) {
 	switch event.Type {
 	case EventTypePickMade:
-		var payload PickMadePayload
+		var payload events.PickMadePayload
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return nil, err
 		}
 		return payload, nil
 
 	case EventTypePickStarted:
-		var payload PickStartedPayload
+		var payload events.PickStartedPayload
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return nil, err
 		}
 		return payload, nil
 
 	case EventTypeDraftStarted:
-		var payload DraftStartedPayload
+		var payload events.DraftStartedPayload
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return nil, err
 		}
 		return payload, nil
 
 	case EventTypeDraftPaused:
-		var payload DraftPausedPayload
+		var payload events.DraftPausedPayload
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return nil, err
 		}
 		return payload, nil
 
 	case EventTypeDraftResumed:
-		var payload DraftResumedPayload
+		var payload events.DraftResumedPayload
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return nil, err
 		}
 		return payload, nil
 
 	case EventTypeDraftCompleted:
-		var payload DraftCompletedPayload
+		var payload events.DraftCompletedPayload
 		if err := json.Unmarshal(event.Data, &payload); err != nil {
 			return nil, err
 		}

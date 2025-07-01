@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mcdev12/dynasty/go/internal/draft/events"
 )
 
 // DraftState represents the current state of a draft for synchronization
@@ -135,7 +136,7 @@ func (dsm *DraftStateManager) ProcessEvent(event *DraftEvent) error {
 		if err != nil {
 			return err
 		}
-		p := payload.(DraftStartedPayload)
+		p := payload.(events.DraftStartedPayload)
 		state.Status = "IN_PROGRESS"
 		state.TotalPicks = p.TotalPicks
 		state.StartedAt = &p.StartedAt
@@ -145,7 +146,7 @@ func (dsm *DraftStateManager) ProcessEvent(event *DraftEvent) error {
 		if err != nil {
 			return err
 		}
-		p := payload.(PickStartedPayload)
+		p := payload.(events.PickStartedPayload)
 		state.CurrentPick = &PickState{
 			PickID:      p.PickID,
 			TeamID:      p.TeamID,
@@ -166,7 +167,7 @@ func (dsm *DraftStateManager) ProcessEvent(event *DraftEvent) error {
 		if err != nil {
 			return err
 		}
-		p := payload.(DraftPausedPayload)
+		p := payload.(events.DraftPausedPayload)
 		state.Status = "PAUSED"
 		state.PausedAt = &p.PausedAt
 
@@ -179,7 +180,7 @@ func (dsm *DraftStateManager) ProcessEvent(event *DraftEvent) error {
 		if err != nil {
 			return err
 		}
-		p := payload.(DraftCompletedPayload)
+		p := payload.(events.DraftCompletedPayload)
 		state.Status = "COMPLETED"
 		state.CompletedAt = &p.CompletedAt
 		state.CurrentPick = nil

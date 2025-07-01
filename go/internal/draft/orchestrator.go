@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork" // optional; import only if you want fake clocks
-	"github.com/mcdev12/dynasty/go/internal/draft/gateway"
+	"github.com/mcdev12/dynasty/go/internal/draft/events"
 	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"github.com/rs/zerolog/log"
@@ -468,7 +468,7 @@ func (o *Orchestrator) emitPickStartedEvent(ctx context.Context, draftID uuid.UU
 	}
 
 	// Create PickStarted payload
-	payload := gateway.PickStartedPayload{
+	payload := events.PickStartedPayload{
 		PickID:         nextPick.ID.String(),
 		TeamID:         nextPick.TeamID.String(),
 		Round:          nextPick.Round,
@@ -501,7 +501,7 @@ func (o *Orchestrator) emitDraftStartedEvent(ctx context.Context, draftID uuid.U
 	totalPicks := draft.Settings.Rounds * len(draft.Settings.DraftOrder)
 
 	// Create DraftStarted payload
-	payload := gateway.DraftStartedPayload{
+	payload := events.DraftStartedPayload{
 		DraftID:     draftID.String(),
 		DraftType:   string(draft.DraftType),
 		StartedAt:   startedAt,
@@ -537,7 +537,7 @@ func (o *Orchestrator) emitDraftCompletedEvent(ctx context.Context, draftID uuid
 	totalPicks := draft.Settings.Rounds * len(draft.Settings.DraftOrder)
 
 	// Create DraftCompleted payload
-	payload := gateway.DraftCompletedPayload{
+	payload := events.DraftCompletedPayload{
 		DraftID:     draftID.String(),
 		CompletedAt: completedAt,
 		Duration:    duration,
@@ -557,7 +557,7 @@ func (o *Orchestrator) emitDraftCompletedEvent(ctx context.Context, draftID uuid
 // emitDraftPausedEvent emits a DraftPaused event to the outbox when a draft is paused
 func (o *Orchestrator) emitDraftPausedEvent(ctx context.Context, draftID uuid.UUID, pausedAt time.Time, reason string) error {
 	// Create DraftPaused payload
-	payload := gateway.DraftPausedPayload{
+	payload := events.DraftPausedPayload{
 		DraftID:  draftID.String(),
 		PausedAt: pausedAt,
 		Reason:   reason,
@@ -576,7 +576,7 @@ func (o *Orchestrator) emitDraftPausedEvent(ctx context.Context, draftID uuid.UU
 // emitDraftResumedEvent emits a DraftResumed event to the outbox when a draft is resumed
 func (o *Orchestrator) emitDraftResumedEvent(ctx context.Context, draftID uuid.UUID, resumedAt time.Time) error {
 	// Create DraftResumed payload
-	payload := gateway.DraftResumedPayload{
+	payload := events.DraftResumedPayload{
 		DraftID:   draftID.String(),
 		ResumedAt: resumedAt,
 	}
