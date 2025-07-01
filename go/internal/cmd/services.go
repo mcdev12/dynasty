@@ -2,8 +2,10 @@ package main
 
 import (
 	"database/sql"
+
 	"github.com/mcdev12/dynasty/go/internal/draft"
 	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
+	"github.com/mcdev12/dynasty/go/internal/draft/gateway"
 	"github.com/mcdev12/dynasty/go/internal/draft/repository"
 	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
 	fantasyteamdb "github.com/mcdev12/dynasty/go/internal/fantasyteam/db"
@@ -21,13 +23,14 @@ import (
 )
 
 type Services struct {
-	Teams       *teams.Service
-	Players     *player.Service
-	Users       *users.Service
-	League      *leagues.Service
-	FantasyTeam *fantasyteam.Service
-	Roster      *roster.Service
-	Draft       *draft.Service
+	Teams        *teams.Service
+	Players      *player.Service
+	Users        *users.Service
+	League       *leagues.Service
+	FantasyTeam  *fantasyteam.Service
+	Roster       *roster.Service
+	Draft        *draft.Service
+	DraftGateway *gateway.Service
 }
 
 func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Services {

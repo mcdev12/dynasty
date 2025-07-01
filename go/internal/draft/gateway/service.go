@@ -93,9 +93,13 @@ func (s *Service) Stop() error {
 
 // RegisterRoutes registers the WebSocket HTTP routes
 func (s *Service) RegisterRoutes(mux *http.ServeMux) {
+	log.Info().Msg("registering WebSocket routes")
 	s.wsHandler.RegisterRoutes(mux)
+	
+	log.Info().Msg("registering state API routes")
 	s.stateHandler.RegisterStateRoutes(mux)
-	log.Info().Msg("draft gateway routes registered")
+	
+	log.Info().Msg("all draft gateway routes registered")
 }
 
 // GetStats returns statistics about the gateway service

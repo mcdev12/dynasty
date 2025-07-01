@@ -145,11 +145,15 @@ func (h *StateHandler) HandleGetActiveDrafts(w http.ResponseWriter, r *http.Requ
 
 // RegisterStateRoutes registers state-related HTTP routes
 func (h *StateHandler) RegisterStateRoutes(mux *http.ServeMux) {
+	// Register specific routes
+	mux.HandleFunc("/api/drafts/active", h.HandleGetActiveDrafts)
+	
+	// Register pattern for draft state - note the trailing slash
 	mux.HandleFunc("/api/drafts/", func(w http.ResponseWriter, r *http.Request) {
-		// Route based on path suffix
-		if r.URL.Path == "/api/drafts/active" {
-			h.HandleGetActiveDrafts(w, r)
-		} else if len(r.URL.Path) > len("/api/drafts/") && r.URL.Path[len(r.URL.Path)-6:] == "/state" {
+		log.Debug().Str("path", r.URL.Path).Msg("state handler received request")
+		
+		// Check if path ends with /state
+		if len(r.URL.Path) > len("/api/drafts/") && r.URL.Path[len(r.URL.Path)-6:] == "/state" {
 			h.HandleGetDraftState(w, r)
 		} else {
 			http.NotFound(w, r)
