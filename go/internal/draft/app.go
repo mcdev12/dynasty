@@ -34,6 +34,10 @@ type DraftPickRepositoryImpl interface {
 	ClaimNextPickSlot(ctx context.Context, draftID uuid.UUID) (*repository.Slot, error)
 	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error)
 	InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftCompleted(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftPaused(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftResumed(ctx context.Context, draftID uuid.UUID, payload []byte) error
 }
 
 // LeaguesRepository defines what the app layer needs from the leagues repository for validation
@@ -569,6 +573,38 @@ func (a *App) GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*mode
 func (a *App) InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
 	if err := a.pickRepo.InsertOutboxPickStarted(ctx, draftID, payload); err != nil {
 		return fmt.Errorf("failed to insert PickStarted outbox event: %w", err)
+	}
+	return nil
+}
+
+// InsertOutboxDraftStarted inserts a DraftStarted event into the outbox
+func (a *App) InsertOutboxDraftStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	if err := a.pickRepo.InsertOutboxDraftStarted(ctx, draftID, payload); err != nil {
+		return fmt.Errorf("failed to insert DraftStarted outbox event: %w", err)
+	}
+	return nil
+}
+
+// InsertOutboxDraftCompleted inserts a DraftCompleted event into the outbox
+func (a *App) InsertOutboxDraftCompleted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	if err := a.pickRepo.InsertOutboxDraftCompleted(ctx, draftID, payload); err != nil {
+		return fmt.Errorf("failed to insert DraftCompleted outbox event: %w", err)
+	}
+	return nil
+}
+
+// InsertOutboxDraftPaused inserts a DraftPaused event into the outbox
+func (a *App) InsertOutboxDraftPaused(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	if err := a.pickRepo.InsertOutboxDraftPaused(ctx, draftID, payload); err != nil {
+		return fmt.Errorf("failed to insert DraftPaused outbox event: %w", err)
+	}
+	return nil
+}
+
+// InsertOutboxDraftResumed inserts a DraftResumed event into the outbox
+func (a *App) InsertOutboxDraftResumed(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	if err := a.pickRepo.InsertOutboxDraftResumed(ctx, draftID, payload); err != nil {
+		return fmt.Errorf("failed to insert DraftResumed outbox event: %w", err)
 	}
 	return nil
 }

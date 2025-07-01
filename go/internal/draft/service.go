@@ -31,11 +31,16 @@ type DraftApp interface {
 	ListAvailablePlayersForDraft(ctx context.Context, draftID uuid.UUID) ([]repository.AvailablePlayer, error)
 	GetNextPickForDraft(ctx context.Context, draftID uuid.UUID) (*models.DraftPick, error)
 	InsertOutboxPickStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftCompleted(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftPaused(ctx context.Context, draftID uuid.UUID, payload []byte) error
+	InsertOutboxDraftResumed(ctx context.Context, draftID uuid.UUID, payload []byte) error
 }
 
 type DraftOrchestrator interface {
 	StartDraft(ctx context.Context, draftID uuid.UUID) error
 	PauseDraft(ctx context.Context, draftID uuid.UUID) error
+	ResumeDraft(ctx context.Context, draftID uuid.UUID) error
 	MakePick(ctx context.Context, req repository.MakePickRequest) error
 	RunScheduler(ctx context.Context) error
 }
@@ -161,6 +166,14 @@ func (s *Service) StartDraft(ctx context.Context, req *connect.Request[draftv1.S
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&draftv1.StartDraftResponse{}), nil
+}
+
+func (s *Service) ResumeDraft(ctx context.Context, req *connect.Request[draftv1.ResumeDraftRequest]) (*connect.Response[draftv1.ResumeDraftResponse], error) {
+	id, _ := uuid.Parse(req.Msg.DraftId)
+	if err := s.orch.ResumeDraft(ctx, id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&draftv1.ResumeDraftResponse{}), nil
 }
 
 // DeleteDraft deletes a draft by ID

@@ -35,9 +35,9 @@ type Orchestrator struct {
 	// Worker pool configuration
 	numWorkers int
 	workCh     chan uuid.UUID
-	
+
 	// Track in-flight work to prevent duplicate processing
-	inFlight map[uuid.UUID]bool
+	inFlight   map[uuid.UUID]bool
 	inFlightMu sync.Mutex
 }
 
@@ -91,16 +91,23 @@ func (o *Orchestrator) MakePick(ctx context.Context, req repository.MakePickRequ
 
 // StartDraft starts the draft and sets a new deadline.
 func (o *Orchestrator) StartDraft(ctx context.Context, draftID uuid.UUID) error {
+	startedAt := o.clock.Now()
+
 	_, err := o.app.UpdateDraftStatus(ctx, draftID, repository.UpdateDraftStatusRequest{Status: models.DraftStatusInProgress})
 	if err != nil {
 		return err
+	}
+
+	// Emit DraftStarted event
+	if err := o.emitDraftStartedEvent(ctx, draftID, startedAt); err != nil {
+		log.Error().Err(err).Str("draft_id", draftID.String()).Msg("failed to emit DraftStarted event")
+		// Don't fail the operation, just log the error
 	}
 
 	timeOut, err := o.getPickTime(ctx, draftID)
 	if err != nil {
 		return err
 	}
-	startedAt := o.clock.Now()
 	next := startedAt.Add(timeOut)
 
 	if err := o.app.UpdateNextDeadline(ctx, draftID, &next); err != nil {
@@ -123,27 +130,77 @@ func (o *Orchestrator) StartDraft(ctx context.Context, draftID uuid.UUID) error 
 
 // PauseDraft pauses a draft and clears its deadline.
 func (o *Orchestrator) PauseDraft(ctx context.Context, draftID uuid.UUID) error {
+	pausedAt := o.clock.Now()
+
 	_, err := o.app.UpdateDraftStatus(ctx, draftID, repository.UpdateDraftStatusRequest{Status: models.DraftStatusPaused})
 	if err != nil {
 		return err
 	}
+
+	// Emit DraftPaused event
+	if err := o.emitDraftPausedEvent(ctx, draftID, pausedAt, "Manual pause"); err != nil {
+		log.Error().Err(err).Str("draft_id", draftID.String()).Msg("failed to emit DraftPaused event")
+		// Don't fail the operation, just log the error
+	}
+
 	return o.app.ClearNextDeadline(ctx, draftID)
+}
+
+// ResumeDraft resumes a paused draft and restarts the pick timer
+// TODO refactor to resume from remaining time to pick.
+func (o *Orchestrator) ResumeDraft(ctx context.Context, draftID uuid.UUID) error {
+	resumedAt := o.clock.Now()
+
+	_, err := o.app.UpdateDraftStatus(ctx, draftID, repository.UpdateDraftStatusRequest{Status: models.DraftStatusInProgress})
+	if err != nil {
+		return err
+	}
+
+	// Emit DraftResumed event
+	if err := o.emitDraftResumedEvent(ctx, draftID, resumedAt); err != nil {
+		log.Error().Err(err).Str("draft_id", draftID.String()).Msg("failed to emit DraftResumed event")
+		// Don't fail the operation, just log the error
+	}
+
+	// Restart the pick timer
+	timeOut, err := o.getPickTime(ctx, draftID)
+	if err != nil {
+		return err
+	}
+	next := resumedAt.Add(timeOut)
+
+	if err := o.app.UpdateNextDeadline(ctx, draftID, &next); err != nil {
+		return err
+	}
+
+	// Emit PickStarted event for the current pick
+	if err := o.emitPickStartedEvent(ctx, draftID, resumedAt, next); err != nil {
+		log.Error().Err(err).Str("draft_id", draftID.String()).Msg("failed to emit PickStarted event on resume")
+		// Don't fail the operation, just log the error
+	}
+
+	// wake the scheduler
+	select {
+	case o.wakeCh <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 // RunScheduler loops forever, sleeping until the next deadline and firing timeouts.
 func (o *Orchestrator) RunScheduler(ctx context.Context) error {
 	log.Info().Str("instance", o.instanceID).Int("workers", o.numWorkers).Msg("scheduler started")
-	
+
 	// Start worker pool
 	var wg sync.WaitGroup
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
-	
+
 	for i := 0; i < o.numWorkers; i++ {
 		wg.Add(1)
 		go o.worker(workerCtx, &wg, i)
 	}
-	
+
 	// Ensure workers are cleaned up
 	defer func() {
 		log.Info().Str("instance", o.instanceID).Msg("shutting down workers")
@@ -152,7 +209,7 @@ func (o *Orchestrator) RunScheduler(ctx context.Context) error {
 		wg.Wait()
 		log.Info().Str("instance", o.instanceID).Msg("all workers shut down")
 	}()
-	
+
 	timer := o.clock.NewTimer(0)
 	defer timer.Stop()
 
@@ -272,7 +329,7 @@ func (o *Orchestrator) RunScheduler(ctx context.Context) error {
 				}
 				o.inFlight[draftID] = true
 				o.inFlightMu.Unlock()
-				
+
 				select {
 				case <-ctx.Done():
 					// Clean up in-flight tracking on shutdown
@@ -317,6 +374,9 @@ func (o *Orchestrator) finalizeIfComplete(ctx context.Context, draftID uuid.UUID
 	if rem > 0 {
 		return nil
 	}
+
+	completedAt := o.clock.Now()
+
 	// Mark draft completed and clear any deadline
 	_, err := o.app.UpdateDraftStatus(ctx, draftID, repository.UpdateDraftStatusRequest{
 		Status: models.DraftStatusCompleted,
@@ -324,19 +384,25 @@ func (o *Orchestrator) finalizeIfComplete(ctx context.Context, draftID uuid.UUID
 	if err != nil {
 		return err
 	}
-	return o.app.ClearNextDeadline(ctx, draftID)
 
+	// Emit DraftCompleted event
+	if err := o.emitDraftCompletedEvent(ctx, draftID, completedAt); err != nil {
+		log.Error().Err(err).Str("draft_id", draftID.String()).Msg("failed to emit DraftCompleted event")
+		// Don't fail the operation, just log the error
+	}
+
+	return o.app.ClearNextDeadline(ctx, draftID)
 }
 
 // worker processes draft timeouts from the work channel
 func (o *Orchestrator) worker(ctx context.Context, wg *sync.WaitGroup, workerID int) {
 	defer wg.Done()
-	
+
 	log.Info().
 		Str("instance", o.instanceID).
 		Int("worker_id", workerID).
 		Msg("worker started")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -353,13 +419,13 @@ func (o *Orchestrator) worker(ctx context.Context, wg *sync.WaitGroup, workerID 
 					Msg("work channel closed, worker shutting down")
 				return
 			}
-			
+
 			log.Info().
 				Str("draft_id", draftID.String()).
 				Str("instance", o.instanceID).
 				Int("worker_id", workerID).
 				Msg("worker handling timeout")
-			
+
 			if err := o.handleTimeout(ctx, draftID); err != nil {
 				log.Error().
 					Err(err).
@@ -368,7 +434,7 @@ func (o *Orchestrator) worker(ctx context.Context, wg *sync.WaitGroup, workerID 
 					Int("worker_id", workerID).
 					Msg("worker timeout handling failed")
 			}
-			
+
 			// Clean up in-flight tracking regardless of success/failure
 			o.inFlightMu.Lock()
 			delete(o.inFlight, draftID)
@@ -421,4 +487,106 @@ func (o *Orchestrator) emitPickStartedEvent(ctx context.Context, draftID uuid.UU
 
 	// Insert into outbox
 	return o.app.InsertOutboxPickStarted(ctx, draftID, payloadBytes)
+}
+
+// emitDraftStartedEvent emits a DraftStarted event to the outbox when a draft begins
+func (o *Orchestrator) emitDraftStartedEvent(ctx context.Context, draftID uuid.UUID, startedAt time.Time) error {
+	// Get draft information
+	draft, err := o.app.GetDraft(ctx, draftID)
+	if err != nil {
+		return fmt.Errorf("failed to get draft for DraftStarted event: %w", err)
+	}
+
+	// Count total picks for the draft
+	totalPicks := draft.Settings.Rounds * len(draft.Settings.DraftOrder)
+
+	// Create DraftStarted payload
+	payload := gateway.DraftStartedPayload{
+		DraftID:     draftID.String(),
+		DraftType:   string(draft.DraftType),
+		StartedAt:   startedAt,
+		TotalRounds: draft.Settings.Rounds,
+		TotalPicks:  totalPicks,
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal DraftStarted payload: %w", err)
+	}
+
+	// Insert into outbox
+	return o.app.InsertOutboxDraftStarted(ctx, draftID, payloadBytes)
+}
+
+// emitDraftCompletedEvent emits a DraftCompleted event to the outbox when a draft ends
+func (o *Orchestrator) emitDraftCompletedEvent(ctx context.Context, draftID uuid.UUID, completedAt time.Time) error {
+	// Get draft information
+	draft, err := o.app.GetDraft(ctx, draftID)
+	if err != nil {
+		return fmt.Errorf("failed to get draft for DraftCompleted event: %w", err)
+	}
+
+	// Calculate duration
+	var duration string
+	if draft.StartedAt != nil {
+		duration = completedAt.Sub(*draft.StartedAt).String()
+	}
+
+	// Count total picks for the draft
+	totalPicks := draft.Settings.Rounds * len(draft.Settings.DraftOrder)
+
+	// Create DraftCompleted payload
+	payload := gateway.DraftCompletedPayload{
+		DraftID:     draftID.String(),
+		CompletedAt: completedAt,
+		Duration:    duration,
+		TotalPicks:  totalPicks,
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal DraftCompleted payload: %w", err)
+	}
+
+	// Insert into outbox
+	return o.app.InsertOutboxDraftCompleted(ctx, draftID, payloadBytes)
+}
+
+// emitDraftPausedEvent emits a DraftPaused event to the outbox when a draft is paused
+func (o *Orchestrator) emitDraftPausedEvent(ctx context.Context, draftID uuid.UUID, pausedAt time.Time, reason string) error {
+	// Create DraftPaused payload
+	payload := gateway.DraftPausedPayload{
+		DraftID:  draftID.String(),
+		PausedAt: pausedAt,
+		Reason:   reason,
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal DraftPaused payload: %w", err)
+	}
+
+	// Insert into outbox
+	return o.app.InsertOutboxDraftPaused(ctx, draftID, payloadBytes)
+}
+
+// emitDraftResumedEvent emits a DraftResumed event to the outbox when a draft is resumed
+func (o *Orchestrator) emitDraftResumedEvent(ctx context.Context, draftID uuid.UUID, resumedAt time.Time) error {
+	// Create DraftResumed payload
+	payload := gateway.DraftResumedPayload{
+		DraftID:   draftID.String(),
+		ResumedAt: resumedAt,
+	}
+
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal DraftResumed payload: %w", err)
+	}
+
+	// Insert into outbox
+	return o.app.InsertOutboxDraftResumed(ctx, draftID, payloadBytes)
 }

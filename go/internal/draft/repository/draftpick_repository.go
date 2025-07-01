@@ -280,6 +280,42 @@ func (dp *DraftPickRepository) InsertOutboxPickStarted(ctx context.Context, draf
 	})
 }
 
+// InsertOutboxDraftStarted inserts a DraftStarted event into the outbox
+func (dp *DraftPickRepository) InsertOutboxDraftStarted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	return dp.queries.InsertOutboxDraftStarted(ctx, db.InsertOutboxDraftStartedParams{
+		ID:      uuid.New(),
+		DraftID: draftID,
+		Payload: payload,
+	})
+}
+
+// InsertOutboxDraftCompleted inserts a DraftCompleted event into the outbox
+func (dp *DraftPickRepository) InsertOutboxDraftCompleted(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	return dp.queries.InsertOutboxDraftCompleted(ctx, db.InsertOutboxDraftCompletedParams{
+		ID:      uuid.New(),
+		DraftID: draftID,
+		Payload: payload,
+	})
+}
+
+// InsertOutboxDraftPaused inserts a DraftPaused event into the outbox
+func (dp *DraftPickRepository) InsertOutboxDraftPaused(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	return dp.queries.InsertOutboxDraftPaused(ctx, db.InsertOutboxDraftPausedParams{
+		ID:      uuid.New(),
+		DraftID: draftID,
+		Payload: payload,
+	})
+}
+
+// InsertOutboxDraftResumed inserts a DraftResumed event into the outbox
+func (dp *DraftPickRepository) InsertOutboxDraftResumed(ctx context.Context, draftID uuid.UUID, payload []byte) error {
+	return dp.queries.InsertOutboxDraftResumed(ctx, db.InsertOutboxDraftResumedParams{
+		ID:      uuid.New(),
+		DraftID: draftID,
+		Payload: payload,
+	})
+}
+
 func (r *DraftPickRepository) dbDraftPickToModel(dbPick db.DraftPick) *models.DraftPick {
 	var playerID *uuid.UUID
 	if dbPick.PlayerID.Valid {

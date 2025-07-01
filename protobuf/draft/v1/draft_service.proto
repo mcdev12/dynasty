@@ -16,6 +16,7 @@ service DraftService {
   // TODO update draft settings eventually
   rpc StartDraft(StartDraftRequest) returns (StartDraftResponse);
   rpc PauseDraft(PauseDraftRequest) returns (PauseDraftResponse);
+  rpc ResumeDraft(ResumeDraftRequest) returns (ResumeDraftResponse);
   rpc DeleteDraft(DeleteDraftRequest) returns (DeleteDraftResponse);
 
   // Picks
@@ -77,6 +78,14 @@ message PauseDraftRequest {
 
 message PauseDraftResponse {
   string draft_id = 1;
+}
+
+message ResumeDraftRequest {
+  string draft_id = 1;
+}
+
+message ResumeDraftResponse {
+
 }
 
 message DeleteDraftRequest {
