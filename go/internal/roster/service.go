@@ -6,6 +6,10 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
+	fantasyteamv1 "github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1"
+	"github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1/fantasyteamv1connect"
+	playerv1 "github.com/mcdev12/dynasty/go/internal/genproto/player/v1"
+	"github.com/mcdev12/dynasty/go/internal/genproto/player/v1/playerv1connect"
 	rosterv1 "github.com/mcdev12/dynasty/go/internal/genproto/roster/v1"
 	"github.com/mcdev12/dynasty/go/internal/genproto/roster/v1/rosterv1connect"
 	"github.com/mcdev12/dynasty/go/internal/models"
@@ -33,13 +37,17 @@ type RosterApp interface {
 
 // Service implements the RosterService gRPC interface
 type Service struct {
-	app RosterApp
+	app                RosterApp
+	fantasyTeamService fantasyteamv1connect.FantasyTeamServiceClient
+	playerService      playerv1connect.PlayerServiceClient
 }
 
 // NewService creates a new roster gRPC service
-func NewService(app RosterApp) *Service {
+func NewService(app RosterApp, fantasyTeamService fantasyteamv1connect.FantasyTeamServiceClient, playerService playerv1connect.PlayerServiceClient) *Service {
 	return &Service{
-		app: app,
+		app:                app,
+		fantasyTeamService: fantasyTeamService,
+		playerService:      playerService,
 	}
 }
 
@@ -51,6 +59,22 @@ func (s *Service) CreateRosterPlayer(ctx context.Context, req *connect.Request[r
 	appReq, err := s.protoToCreateRosterRequest(req.Msg)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate fantasy team exists first
+	_, err = s.fantasyTeamService.GetFantasyTeam(ctx, connect.NewRequest(&fantasyteamv1.GetFantasyTeamRequest{
+		Id: appReq.FantasyTeamID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Cross-domain orchestration: validate player exists first
+	_, err = s.playerService.GetPlayer(ctx, connect.NewRequest(&playerv1.GetPlayerRequest{
+		Id: appReq.PlayerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	roster, err := s.app.CreateRosterPlayer(ctx, appReq)
@@ -95,6 +119,14 @@ func (s *Service) GetRosterPlayersByFantasyTeam(ctx context.Context, req *connec
 	fantasyTeamID, err := uuid.Parse(req.Msg.FantasyTeamId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate fantasy team exists first
+	_, err = s.fantasyTeamService.GetFantasyTeam(ctx, connect.NewRequest(&fantasyteamv1.GetFantasyTeamRequest{
+		Id: fantasyTeamID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	rosters, err := s.app.GetRosterPlayersByFantasyTeam(ctx, fantasyTeamID)
@@ -146,6 +178,22 @@ func (s *Service) GetPlayerOnRoster(ctx context.Context, req *connect.Request[ro
 	playerID, err := uuid.Parse(req.Msg.PlayerId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate fantasy team exists first
+	_, err = s.fantasyTeamService.GetFantasyTeam(ctx, connect.NewRequest(&fantasyteamv1.GetFantasyTeamRequest{
+		Id: fantasyTeamID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Cross-domain orchestration: validate player exists first
+	_, err = s.playerService.GetPlayer(ctx, connect.NewRequest(&playerv1.GetPlayerRequest{
+		Id: playerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	roster, err := s.app.GetPlayerOnRoster(ctx, fantasyTeamID, playerID)

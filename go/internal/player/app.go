@@ -10,17 +10,16 @@ import (
 	"github.com/mcdev12/dynasty/go/internal/sports/base"
 )
 
+
 // PlayerRepository defines what the app layer needs from the repository
 type PlayerRepository interface {
 	CreatePlayer(ctx context.Context, req CreatePlayerRequest) (*models.Player, error)
 	GetPlayer(ctx context.Context, id uuid.UUID) (*models.Player, error)
 	GetPlayerByExternalID(ctx context.Context, sportID, externalID string) (*models.Player, error)
+	UpdatePlayer(ctx context.Context, playerID uuid.UUID, fullName string, teamID *uuid.UUID) (*models.Player, error)
+	UpdatePlayerProfile(ctx context.Context, playerID uuid.UUID, profile models.Profile) error
 	UpdatePlayerAndProfile(ctx context.Context, playerID uuid.UUID, fullName string, teamID *uuid.UUID, profile models.Profile) (*models.Player, error)
 	DeletePlayer(ctx context.Context, id uuid.UUID) error
-}
-
-type TeamApp interface {
-	GetTeamBySportIdAndCode(ctx context.Context, sportID, code string) (*models.Team, error)
 }
 
 // SyncResult represents the result of syncing players from external API
@@ -31,40 +30,57 @@ type SyncResult struct {
 	Errors         []error `json:"errors,omitempty"`
 }
 
+// AddError adds an error to the sync result
+func (r *SyncResult) AddError(err error) {
+	r.Errors = append(r.Errors, err)
+}
+
+// HasErrors returns true if there are any errors
+func (r *SyncResult) HasErrors() bool {
+	return len(r.Errors) > 0
+}
+
 // App handles player business logic
 type App struct {
 	repo    PlayerRepository
-	teamApp TeamApp
 	plugins map[string]base.SportPlugin
 }
 
 // NewApp creates a new player App
-func NewApp(repo PlayerRepository, plugins map[string]base.SportPlugin, teamApp TeamApp) *App {
+func NewApp(repo PlayerRepository, plugins map[string]base.SportPlugin) *App {
 	return &App{
 		repo:    repo,
-		teamApp: teamApp,
 		plugins: plugins,
 	}
 }
 
 // CreatePlayer creates a new player with validation
-func (a *App) CreatePlayer(ctx context.Context, req CreatePlayerRequest) (*models.Player, error) {
-	if err := a.validateCreatePlayerRequest(req); err != nil {
+func (a *App) CreatePlayer(ctx context.Context, player *models.Player) (*models.Player, error) {
+	if err := a.validatePlayer(player); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
 	// Check if player with same external ID already exists
-	existingPlayer, err := a.repo.GetPlayerByExternalID(ctx, req.SportID, req.ExternalID)
+	existingPlayer, err := a.repo.GetPlayerByExternalID(ctx, player.SportID, player.ExternalID)
 	if err == nil && existingPlayer != nil {
-		return nil, fmt.Errorf("player with external ID %s already exists for sport %s", req.ExternalID, req.SportID)
+		return nil, fmt.Errorf("player with external ID %s already exists for sport %s", player.ExternalID, player.SportID)
 	}
 
-	player, err := a.repo.CreatePlayer(ctx, req)
+	// Convert to CreatePlayerRequest
+	req := CreatePlayerRequest{
+		SportID:    player.SportID,
+		ExternalID: player.ExternalID,
+		FullName:   player.FullName,
+		TeamID:     player.TeamID,
+		Profile:    player.NFLPlayerProfile,
+	}
+
+	createdPlayer, err := a.repo.CreatePlayer(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create player: %w", err)
 	}
 
-	return player, nil
+	return createdPlayer, nil
 }
 
 // GetPlayer retrieves a player by ID
@@ -100,38 +116,42 @@ func (a *App) DeletePlayer(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// validateCreatePlayerRequest validates create player request
-func (a *App) validateCreatePlayerRequest(req CreatePlayerRequest) error {
-	if req.SportID == "" {
+// validatePlayer validates a player model
+func (a *App) validatePlayer(player *models.Player) error {
+	if player.SportID == "" {
 		return fmt.Errorf("sport_id is required")
 	}
-	if req.ExternalID == "" {
+	if player.ExternalID == "" {
 		return fmt.Errorf("external_id is required")
 	}
-	if req.FullName == "" {
+	if player.FullName == "" {
 		return fmt.Errorf("full_name is required")
 	}
 	return nil
 }
 
 // SyncPlayersFromAPI synchronizes players from external API for a specific team
-func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId string) (*SyncResult, error) {
+func (a *App) SyncPlayersFromAPI(ctx context.Context, teamID uuid.UUID, teamCode string, sportID string) (*SyncResult, error) {
+	if teamID == uuid.Nil {
+		return nil, fmt.Errorf("team_id is required")
+	}
+	if teamCode == "" {
+		return nil, fmt.Errorf("team_code is required")
+	}
+	if sportID == "" {
+		return nil, fmt.Errorf("sport_id is required")
+	}
+
 	result := &SyncResult{}
 
-	// Fetch team for team id
-	team, err := a.teamApp.GetTeamBySportIdAndCode(ctx, sportId, teamAlias)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get team: %w", err)
-	}
-
-	// Get the NFL plugin (assuming NFL for now)
-	plugin, exists := a.plugins[sportId]
+	// Get the plugin for the sport
+	plugin, exists := a.plugins[sportID]
 	if !exists {
-		return nil, fmt.Errorf("no plugin found for sport: nfl")
+		return nil, fmt.Errorf("no plugin found for sport: %s", sportID)
 	}
 
-	// Fetch players from the plugin for a specific team
-	players, err := plugin.FetchPlayers(ctx, teamAlias)
+	// Fetch players from the plugin for the specific team
+	players, err := plugin.FetchPlayers(ctx, teamCode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch players from plugin: %w", err)
 	}
@@ -139,9 +159,9 @@ func (a *App) SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId 
 	result.TotalProcessed = len(players)
 
 	for _, player := range players {
-		isNew, err := a.upsertPlayerFromPlugin(ctx, plugin, player, team.ID)
+		isNew, err := a.upsertPlayerFromPlugin(ctx, plugin, player, teamID)
 		if err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("failed to upsert player %s: %w", player.Name, err))
+			result.AddError(fmt.Errorf("failed to upsert player %s: %w", player.Name, err))
 			continue
 		}
 
@@ -176,14 +196,14 @@ func (a *App) upsertPlayerFromPlugin(ctx context.Context, plugin base.SportPlugi
 	existingPlayer, err := a.repo.GetPlayerByExternalID(ctx, player.SportID, player.ExternalID)
 	if err != nil {
 		// Player doesn't exist, create it
-		createReq := CreatePlayerRequest{
+		req := CreatePlayerRequest{
 			SportID:    player.SportID,
 			ExternalID: player.ExternalID,
 			FullName:   player.FullName,
 			TeamID:     player.TeamID,
 			Profile:    player.NFLPlayerProfile,
 		}
-		_, err := a.repo.CreatePlayer(ctx, createReq)
+		_, err := a.repo.CreatePlayer(ctx, req)
 		if err != nil {
 			return false, fmt.Errorf("failed to create player: %w", err)
 		}

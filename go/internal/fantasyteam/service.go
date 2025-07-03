@@ -7,6 +7,10 @@ import (
 	"github.com/google/uuid"
 	fantasyteamv1 "github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1"
 	"github.com/mcdev12/dynasty/go/internal/genproto/fantasyteam/v1/fantasyteamv1connect"
+	leaguev1 "github.com/mcdev12/dynasty/go/internal/genproto/league/v1"
+	"github.com/mcdev12/dynasty/go/internal/genproto/league/v1/leaguev1connect"
+	userv1 "github.com/mcdev12/dynasty/go/internal/genproto/user/v1"
+	"github.com/mcdev12/dynasty/go/internal/genproto/user/v1/userv1connect"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -24,13 +28,17 @@ type FantasyTeamApp interface {
 
 // Service implements the FantasyTeamService gRPC interface
 type Service struct {
-	app FantasyTeamApp
+	app           FantasyTeamApp
+	userService   userv1connect.UserServiceClient
+	leagueService leaguev1connect.LeagueServiceClient
 }
 
 // NewService creates a new fantasy teams gRPC service
-func NewService(app FantasyTeamApp) *Service {
+func NewService(app FantasyTeamApp, userService userv1connect.UserServiceClient, leagueService leaguev1connect.LeagueServiceClient) *Service {
 	return &Service{
-		app: app,
+		app:           app,
+		userService:   userService,
+		leagueService: leagueService,
 	}
 }
 
@@ -42,6 +50,22 @@ func (s *Service) CreateFantasyTeam(ctx context.Context, req *connect.Request[fa
 	appReq, err := s.protoToCreateFantasyTeamRequest(req.Msg)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate owner exists first
+	_, err = s.userService.GetUser(ctx, connect.NewRequest(&userv1.GetUserRequest{
+		Id: appReq.OwnerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Cross-domain orchestration: validate league exists first
+	_, err = s.leagueService.GetLeague(ctx, connect.NewRequest(&leaguev1.GetLeagueRequest{
+		Id: appReq.LeagueID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	team, err := s.app.CreateFantasyTeam(ctx, appReq)
@@ -82,6 +106,14 @@ func (s *Service) GetFantasyTeamsByLeague(ctx context.Context, req *connect.Requ
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	// Cross-domain orchestration: validate league exists first
+	_, err = s.leagueService.GetLeague(ctx, connect.NewRequest(&leaguev1.GetLeagueRequest{
+		Id: leagueID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
 	teams, err := s.app.GetFantasyTeamsByLeague(ctx, leagueID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -99,6 +131,14 @@ func (s *Service) GetFantasyTeamsByOwner(ctx context.Context, req *connect.Reque
 	ownerID, err := uuid.Parse(req.Msg.OwnerId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate owner exists first
+	_, err = s.userService.GetUser(ctx, connect.NewRequest(&userv1.GetUserRequest{
+		Id: ownerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	teams, err := s.app.GetFantasyTeamsByOwner(ctx, ownerID)
@@ -123,6 +163,22 @@ func (s *Service) GetFantasyTeamByLeagueAndOwner(ctx context.Context, req *conne
 	leagueID, err := uuid.Parse(req.Msg.LeagueId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate owner exists first
+	_, err = s.userService.GetUser(ctx, connect.NewRequest(&userv1.GetUserRequest{
+		Id: ownerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Cross-domain orchestration: validate league exists first
+	_, err = s.leagueService.GetLeague(ctx, connect.NewRequest(&leaguev1.GetLeagueRequest{
+		Id: leagueID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	team, err := s.app.GetFantasyTeamByLeagueAndOwner(ctx, ownerID, leagueID)

@@ -46,8 +46,8 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	// Players
 	playerQueries := playerdb.New(database)
 	playerRepo := player.NewRepository(playerQueries, database)
-	playerApp := player.NewApp(playerRepo, plugins, teamsApp)
-	playerService := player.NewService(playerApp)
+	playerApp := player.NewApp(playerRepo, plugins)
+	playerService := player.NewService(playerApp, teamsService)
 
 	// Users
 	userQueries := usersdb.New(database)
@@ -58,20 +58,20 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	// League
 	leagueQueries := leaguedb.New(database)
 	leagueRepo := leagues.NewRepository(leagueQueries)
-	leagueApp := leagues.NewApp(leagueRepo, userApp)
-	leagueService := leagues.NewService(leagueApp)
+	leagueApp := leagues.NewApp(leagueRepo)
+	leagueService := leagues.NewService(leagueApp, userService)
 
 	// FantasyTeam
 	fantasyTeamQueries := fantasyteamdb.New(database)
 	fantasyTeamRepo := fantasyteam.NewRepository(fantasyTeamQueries)
-	fantasyTeamApp := fantasyteam.NewApp(fantasyTeamRepo, userApp, leagueApp)
-	fantasyTeamService := fantasyteam.NewService(fantasyTeamApp)
+	fantasyTeamApp := fantasyteam.NewApp(fantasyTeamRepo)
+	fantasyTeamService := fantasyteam.NewService(fantasyTeamApp, userService, leagueService)
 
 	// Roster players
 	rosterQueries := rosterdb.New(database)
 	rosterRepo := roster.NewRepository(rosterQueries)
-	rosterApp := roster.NewApp(rosterRepo, fantasyTeamRepo, playerRepo)
-	rosterService := roster.NewService(rosterApp)
+	rosterApp := roster.NewApp(rosterRepo)
+	rosterService := roster.NewService(rosterApp, fantasyTeamService, playerService)
 
 	// Draft Service
 	draftQueries := draftdb.New(database)

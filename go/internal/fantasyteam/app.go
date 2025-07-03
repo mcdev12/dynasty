@@ -20,29 +20,15 @@ type FantasyTeamRepository interface {
 	DeleteFantasyTeam(ctx context.Context, id uuid.UUID) error
 }
 
-// UsersRepository defines what the app layer needs from the users repository for validation
-type UsersRepository interface {
-	GetUser(ctx context.Context, id uuid.UUID) (*models.User, error)
-}
-
-// LeaguesRepository defines what the app layer needs from the leagues repository for validation
-type LeaguesRepository interface {
-	GetLeague(ctx context.Context, id uuid.UUID) (*models.League, error)
-}
-
 // App handles fantasy teams business logic
 type App struct {
-	repo        FantasyTeamRepository
-	usersRepo   UsersRepository
-	leaguesRepo LeaguesRepository
+	repo FantasyTeamRepository
 }
 
 // NewApp creates a new fantasy teams App
-func NewApp(repo FantasyTeamRepository, usersRepo UsersRepository, leaguesRepo LeaguesRepository) *App {
+func NewApp(repo FantasyTeamRepository) *App {
 	return &App{
-		repo:        repo,
-		usersRepo:   usersRepo,
-		leaguesRepo: leaguesRepo,
+		repo: repo,
 	}
 }
 
@@ -50,18 +36,6 @@ func NewApp(repo FantasyTeamRepository, usersRepo UsersRepository, leaguesRepo L
 func (a *App) CreateFantasyTeam(ctx context.Context, req CreateFantasyTeamRequest) (*models.FantasyTeam, error) {
 	if err := a.validateCreateFantasyTeamRequest(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
-	}
-
-	// Verify owner exists
-	_, err := a.usersRepo.GetUser(ctx, req.OwnerID)
-	if err != nil {
-		return nil, fmt.Errorf("owner not found: %w", err)
-	}
-
-	// Verify league exists
-	_, err = a.leaguesRepo.GetLeague(ctx, req.LeagueID)
-	if err != nil {
-		return nil, fmt.Errorf("league not found: %w", err)
 	}
 
 	// Check if owner already has a team in this league
@@ -90,12 +64,6 @@ func (a *App) GetFantasyTeam(ctx context.Context, id uuid.UUID) (*models.Fantasy
 
 // GetFantasyTeamsByLeague retrieves fantasy teams by league ID
 func (a *App) GetFantasyTeamsByLeague(ctx context.Context, leagueID uuid.UUID) ([]models.FantasyTeam, error) {
-	// Verify league exists
-	_, err := a.leaguesRepo.GetLeague(ctx, leagueID)
-	if err != nil {
-		return nil, fmt.Errorf("league not found: %w", err)
-	}
-
 	teams, err := a.repo.GetFantasyTeamsByLeague(ctx, leagueID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fantasy teams by league: %w", err)
@@ -105,12 +73,6 @@ func (a *App) GetFantasyTeamsByLeague(ctx context.Context, leagueID uuid.UUID) (
 
 // GetFantasyTeamsByOwner retrieves fantasy teams by owner ID
 func (a *App) GetFantasyTeamsByOwner(ctx context.Context, ownerID uuid.UUID) ([]models.FantasyTeam, error) {
-	// Verify owner exists
-	_, err := a.usersRepo.GetUser(ctx, ownerID)
-	if err != nil {
-		return nil, fmt.Errorf("owner not found: %w", err)
-	}
-
 	teams, err := a.repo.GetFantasyTeamsByOwner(ctx, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fantasy teams by owner: %w", err)
@@ -120,18 +82,6 @@ func (a *App) GetFantasyTeamsByOwner(ctx context.Context, ownerID uuid.UUID) ([]
 
 // GetFantasyTeamByLeagueAndOwner retrieves a fantasy team by league and owner
 func (a *App) GetFantasyTeamByLeagueAndOwner(ctx context.Context, ownerID, leagueID uuid.UUID) (*models.FantasyTeam, error) {
-	// Verify owner exists
-	_, err := a.usersRepo.GetUser(ctx, ownerID)
-	if err != nil {
-		return nil, fmt.Errorf("owner not found: %w", err)
-	}
-
-	// Verify league exists
-	_, err = a.leaguesRepo.GetLeague(ctx, leagueID)
-	if err != nil {
-		return nil, fmt.Errorf("league not found: %w", err)
-	}
-
 	team, err := a.repo.GetFantasyTeamByLeagueAndOwner(ctx, ownerID, leagueID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fantasy team by league and owner: %w", err)

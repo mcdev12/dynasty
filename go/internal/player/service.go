@@ -8,29 +8,33 @@ import (
 	"github.com/google/uuid"
 	playerv1 "github.com/mcdev12/dynasty/go/internal/genproto/player/v1"
 	"github.com/mcdev12/dynasty/go/internal/genproto/player/v1/playerv1connect"
+	teamv1 "github.com/mcdev12/dynasty/go/internal/genproto/team/v1"
+	"github.com/mcdev12/dynasty/go/internal/genproto/team/v1/teamv1connect"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // PlayerApp defines what the service layer needs from the player application
 type PlayerApp interface {
-	CreatePlayer(ctx context.Context, req CreatePlayerRequest) (*models.Player, error)
+	CreatePlayer(ctx context.Context, player *models.Player) (*models.Player, error)
 	GetPlayer(ctx context.Context, id uuid.UUID) (*models.Player, error)
 	GetPlayerByExternalID(ctx context.Context, sportID, externalID string) (*models.Player, error)
 	DeletePlayer(ctx context.Context, id uuid.UUID) error
-	SyncPlayersFromAPI(ctx context.Context, teamAlias string, sportId string) (*SyncResult, error)
+	SyncPlayersFromAPI(ctx context.Context, teamID uuid.UUID, teamCode string, sportID string) (*SyncResult, error)
 	SyncAllNFLPlayersFromAPI(ctx context.Context) (*SyncResult, error)
 }
 
 // Service implements the PlayerService gRPC interface
 type Service struct {
-	app PlayerApp
+	app         PlayerApp
+	teamService teamv1connect.TeamServiceClient
 }
 
 // NewService creates a new player gRPC service
-func NewService(app PlayerApp) *Service {
+func NewService(app PlayerApp, teamService teamv1connect.TeamServiceClient) *Service {
 	return &Service{
-		app: app,
+		app:         app,
+		teamService: teamService,
 	}
 }
 
@@ -39,14 +43,33 @@ var _ playerv1connect.PlayerServiceHandler = (*Service)(nil)
 
 // CreatePlayer creates a new player
 func (s *Service) CreatePlayer(ctx context.Context, req *connect.Request[playerv1.CreatePlayerRequest]) (*connect.Response[playerv1.CreatePlayerResponse], error) {
-	appReq := s.protoToCreatePlayerRequest(req.Msg)
+	// Simple proto to models conversion
+	player := &models.Player{
+		SportID:    req.Msg.SportId,
+		ExternalID: req.Msg.ExternalId,
+		FullName:   req.Msg.FullName,
+	}
 
-	player, err := s.app.CreatePlayer(ctx, appReq)
+	// Parse optional team ID
+	if req.Msg.TeamId != "" {
+		if teamID, err := uuid.Parse(req.Msg.TeamId); err == nil {
+			player.TeamID = &teamID
+		}
+	}
+
+	// Handle profile if provided
+	if req.Msg.GetPlayerProfile() != nil {
+		if nflProfile := req.Msg.GetPlayerProfile().GetNflProfile(); nflProfile != nil {
+			player.NFLPlayerProfile = s.protoToNFLProfile(nflProfile)
+		}
+	}
+
+	createdPlayer, err := s.app.CreatePlayer(ctx, player)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	protoPlayer := s.playerToProto(player)
+	protoPlayer := s.playerToProto(createdPlayer)
 
 	return connect.NewResponse(&playerv1.CreatePlayerResponse{
 		Player: protoPlayer,
@@ -111,11 +134,25 @@ func (s *Service) DeletePlayer(ctx context.Context, req *connect.Request[playerv
 
 // SyncPlayersFromAPI synchronizes players from external sports API for a specific team
 func (s *Service) SyncPlayersFromAPI(ctx context.Context, req *connect.Request[playerv1.SyncPlayersFromAPIRequest]) (*connect.Response[playerv1.SyncPlayersFromAPIResponse], error) {
-	result, err := s.app.SyncPlayersFromAPI(ctx, req.Msg.TeamAlias, req.Msg.SportId)
+	teamResp, err := s.teamService.GetTeamBySportIDAndCode(ctx, connect.NewRequest(&teamv1.GetTeamBySportIDAndCodeRequest{
+		SportId:  req.Msg.SportId,
+		TeamCode: req.Msg.TeamAlias,
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Extract only the fields we need from the team proto
+	teamID, _ := uuid.Parse(teamResp.Msg.Team.Id)
+	teamCode := teamResp.Msg.Team.Code
+
+	// Call app layer with only the data we need
+	result, err := s.app.SyncPlayersFromAPI(ctx, teamID, teamCode, req.Msg.SportId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
+	// Convert result to proto
 	protoResult := s.syncResultToProto(result)
 
 	return connect.NewResponse(&playerv1.SyncPlayersFromAPIResponse{
@@ -193,39 +230,9 @@ func (s *Service) nflProfileToProto(profile *models.NFLPlayerProfile) *playerv1.
 	return proto
 }
 
-func (s *Service) protoToCreatePlayerRequest(proto *playerv1.CreatePlayerRequest) CreatePlayerRequest {
-	req := CreatePlayerRequest{
-		SportID:    proto.SportId,
-		ExternalID: proto.ExternalId,
-		FullName:   proto.FullName,
-	}
-
-	if proto.TeamId != "" {
-		if teamID, err := uuid.Parse(proto.TeamId); err == nil {
-			req.TeamID = &teamID
-		}
-	}
-
-	// Handle profile if provided
-	if proto.GetPlayerProfile() != nil {
-		req.Profile = s.protoToProfile(proto.GetPlayerProfile())
-	}
-
-	return req
-}
-
-func (s *Service) protoToProfile(proto *playerv1.PlayerProfile) models.Profile {
-	switch profile := proto.GetProfile().(type) {
-	case *playerv1.PlayerProfile_NflProfile:
-		return s.protoToNFLProfile(profile.NflProfile)
-	default:
-		return nil
-	}
-}
-
 func (s *Service) protoToNFLProfile(proto *playerv1.NFLPlayerProfile) *models.NFLPlayerProfile {
 	playerID, _ := uuid.Parse(proto.PlayerId)
-	
+
 	profile := &models.NFLPlayerProfile{
 		PlayerID:     playerID,
 		Position:     proto.Position,

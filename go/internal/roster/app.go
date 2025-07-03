@@ -27,29 +27,15 @@ type RosterRepository interface {
 	DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID) error
 }
 
-// FantasyTeamsRepository defines what the app layer needs from the fantasy teams repository for validation
-type FantasyTeamsRepository interface {
-	GetFantasyTeam(ctx context.Context, id uuid.UUID) (*models.FantasyTeam, error)
-}
-
-// PlayersRepository defines what the app layer needs from the players repository for validation
-type PlayersRepository interface {
-	GetPlayer(ctx context.Context, id uuid.UUID) (*models.Player, error)
-}
-
 // App handles roster business logic
 type App struct {
-	repo             RosterRepository
-	fantasyTeamsRepo FantasyTeamsRepository
-	playersRepo      PlayersRepository
+	repo RosterRepository
 }
 
 // NewApp creates a new roster App
-func NewApp(repo RosterRepository, fantasyTeamsRepo FantasyTeamsRepository, playersRepo PlayersRepository) *App {
+func NewApp(repo RosterRepository) *App {
 	return &App{
-		repo:             repo,
-		fantasyTeamsRepo: fantasyTeamsRepo,
-		playersRepo:      playersRepo,
+		repo: repo,
 	}
 }
 
@@ -57,18 +43,6 @@ func NewApp(repo RosterRepository, fantasyTeamsRepo FantasyTeamsRepository, play
 func (a *App) CreateRosterPlayer(ctx context.Context, req CreateRosterPlayerRequest) (*models.Roster, error) {
 	if err := a.validateCreateRosterPlayerRequest(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
-	}
-
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, req.FantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
-	}
-
-	// Verify player exists
-	_, err = a.playersRepo.GetPlayer(ctx, req.PlayerID)
-	if err != nil {
-		return nil, fmt.Errorf("player not found: %w", err)
 	}
 
 	// Check if player is already on this team's roster
@@ -97,12 +71,6 @@ func (a *App) GetRoster(ctx context.Context, id uuid.UUID) (*models.Roster, erro
 
 // GetRosterPlayersByFantasyTeam retrieves all players on a team's roster
 func (a *App) GetRosterPlayersByFantasyTeam(ctx context.Context, fantasyTeamID uuid.UUID) ([]models.Roster, error) {
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
-	}
-
 	rosters, err := a.repo.GetRosterPlayersByFantasyTeam(ctx, fantasyTeamID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roster players by fantasy team: %w", err)
@@ -116,12 +84,6 @@ func (a *App) GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, fant
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
-	}
-
 	rosters, err := a.repo.GetRosterPlayersByFantasyTeamAndPosition(ctx, fantasyTeamID, position)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roster players by team and position: %w", err)
@@ -131,18 +93,6 @@ func (a *App) GetRosterPlayersByFantasyTeamAndPosition(ctx context.Context, fant
 
 // GetPlayerOnRoster checks if a specific player is on a team's roster
 func (a *App) GetPlayerOnRoster(ctx context.Context, fantasyTeamID, playerID uuid.UUID) (*models.Roster, error) {
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
-	}
-
-	// Verify player exists
-	_, err = a.playersRepo.GetPlayer(ctx, playerID)
-	if err != nil {
-		return nil, fmt.Errorf("player not found: %w", err)
-	}
-
 	roster, err := a.repo.GetPlayerOnRoster(ctx, fantasyTeamID, playerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get player on roster: %w", err)
@@ -152,12 +102,6 @@ func (a *App) GetPlayerOnRoster(ctx context.Context, fantasyTeamID, playerID uui
 
 // GetStartingRosterPlayers retrieves all starting players for a team
 func (a *App) GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]models.Roster, error) {
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
-	}
-
 	rosters, err := a.repo.GetStartingRosterPlayers(ctx, fantasyTeamID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get starting roster players: %w", err)
@@ -167,12 +111,6 @@ func (a *App) GetStartingRosterPlayers(ctx context.Context, fantasyTeamID uuid.U
 
 // GetBenchRosterPlayers retrieves all bench players for a team
 func (a *App) GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID) ([]models.Roster, error) {
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
-	}
-
 	rosters, err := a.repo.GetBenchRosterPlayers(ctx, fantasyTeamID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bench roster players: %w", err)
@@ -184,12 +122,6 @@ func (a *App) GetBenchRosterPlayers(ctx context.Context, fantasyTeamID uuid.UUID
 func (a *App) GetRosterPlayersByAcquisitionType(ctx context.Context, fantasyTeamID uuid.UUID, acquisitionType models.AcquisitionType) ([]models.Roster, error) {
 	if err := a.validateAcquisitionType(acquisitionType); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
-	}
-
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return nil, fmt.Errorf("fantasy team not found: %w", err)
 	}
 
 	rosters, err := a.repo.GetRosterPlayersByAcquisitionType(ctx, fantasyTeamID, acquisitionType)
@@ -276,14 +208,8 @@ func (a *App) DeleteRosterEntry(ctx context.Context, id uuid.UUID) error {
 
 // DeletePlayerFromRoster removes a player from a team's roster
 func (a *App) DeletePlayerFromRoster(ctx context.Context, fantasyTeamID, playerID uuid.UUID) error {
-	// Verify fantasy team exists
-	_, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return fmt.Errorf("fantasy team not found: %w", err)
-	}
-
 	// Verify player exists on roster
-	_, err = a.repo.GetPlayerOnRoster(ctx, fantasyTeamID, playerID)
+	_, err := a.repo.GetPlayerOnRoster(ctx, fantasyTeamID, playerID)
 	if err != nil {
 		return fmt.Errorf("player not found on roster: %w", err)
 	}
@@ -298,17 +224,11 @@ func (a *App) DeletePlayerFromRoster(ctx context.Context, fantasyTeamID, playerI
 
 // DeleteTeamRoster clears an entire team's roster
 func (a *App) DeleteTeamRoster(ctx context.Context, fantasyTeamID uuid.UUID) error {
-	// Verify fantasy team exists
-	team, err := a.fantasyTeamsRepo.GetFantasyTeam(ctx, fantasyTeamID)
-	if err != nil {
-		return fmt.Errorf("fantasy team not found: %w", err)
-	}
-
 	if err := a.repo.DeleteTeamRoster(ctx, fantasyTeamID); err != nil {
 		return fmt.Errorf("failed to delete team roster: %w", err)
 	}
 
-	log.Printf("Deleted entire roster for team: %s", team.Name)
+	log.Printf("Deleted entire roster for team: %s", fantasyTeamID)
 	return nil
 }
 

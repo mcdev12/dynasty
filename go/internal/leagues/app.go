@@ -20,22 +20,15 @@ type LeaguesRepository interface {
 	DeleteLeague(ctx context.Context, id uuid.UUID) error
 }
 
-// UsersRepository defines what the app layer needs from the users repository for validation
-type UsersRepository interface {
-	GetUser(ctx context.Context, id uuid.UUID) (*models.User, error)
-}
-
 // App handles leagues business logic
 type App struct {
-	repo      LeaguesRepository
-	usersRepo UsersRepository
+	repo LeaguesRepository
 }
 
 // NewApp creates a new leagues App
-func NewApp(repo LeaguesRepository, usersRepo UsersRepository) *App {
+func NewApp(repo LeaguesRepository) *App {
 	return &App{
-		repo:      repo,
-		usersRepo: usersRepo,
+		repo: repo,
 	}
 }
 
@@ -43,12 +36,6 @@ func NewApp(repo LeaguesRepository, usersRepo UsersRepository) *App {
 func (a *App) CreateLeague(ctx context.Context, req CreateLeagueRequest) (*models.League, error) {
 	if err := a.validateCreateLeagueRequest(req); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
-	}
-
-	// Verify commissioner exists
-	_, err := a.usersRepo.GetUser(ctx, req.CommissionerID)
-	if err != nil {
-		return nil, fmt.Errorf("commissioner not found: %w", err)
 	}
 
 	league, err := a.repo.CreateLeague(ctx, req)
@@ -88,12 +75,6 @@ func (a *App) UpdateLeague(ctx context.Context, id uuid.UUID, req UpdateLeagueRe
 	_, err := a.repo.GetLeague(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("league not found: %w", err)
-	}
-
-	// Verify commissioner exists
-	_, err = a.usersRepo.GetUser(ctx, req.CommissionerID)
-	if err != nil {
-		return nil, fmt.Errorf("commissioner not found: %w", err)
 	}
 
 	league, err := a.repo.UpdateLeague(ctx, id, req)

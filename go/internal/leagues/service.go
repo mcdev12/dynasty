@@ -7,6 +7,8 @@ import (
 	"github.com/google/uuid"
 	leaguev1 "github.com/mcdev12/dynasty/go/internal/genproto/league/v1"
 	"github.com/mcdev12/dynasty/go/internal/genproto/league/v1/leaguev1connect"
+	userv1 "github.com/mcdev12/dynasty/go/internal/genproto/user/v1"
+	"github.com/mcdev12/dynasty/go/internal/genproto/user/v1/userv1connect"
 	"github.com/mcdev12/dynasty/go/internal/models"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -25,13 +27,15 @@ type LeaguesApp interface {
 
 // Service implements the LeagueService gRPC interface
 type Service struct {
-	app LeaguesApp
+	app         LeaguesApp
+	userService userv1connect.UserServiceClient
 }
 
 // NewService creates a new leagues gRPC service
-func NewService(app LeaguesApp) *Service {
+func NewService(app LeaguesApp, userService userv1connect.UserServiceClient) *Service {
 	return &Service{
-		app: app,
+		app:         app,
+		userService: userService,
 	}
 }
 
@@ -43,6 +47,14 @@ func (s *Service) CreateLeague(ctx context.Context, req *connect.Request[leaguev
 	appReq, err := s.protoToCreateLeagueRequest(req.Msg)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate commissioner exists first
+	_, err = s.userService.GetUser(ctx, connect.NewRequest(&userv1.GetUserRequest{
+		Id: appReq.CommissionerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	league, err := s.app.CreateLeague(ctx, appReq)
@@ -114,6 +126,14 @@ func (s *Service) UpdateLeague(ctx context.Context, req *connect.Request[leaguev
 	appReq, err := s.protoToUpdateLeagueRequest(req.Msg)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// Cross-domain orchestration: validate commissioner exists first
+	_, err = s.userService.GetUser(ctx, connect.NewRequest(&userv1.GetUserRequest{
+		Id: appReq.CommissionerID.String(),
+	}))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
 	league, err := s.app.UpdateLeague(ctx, id, appReq)
