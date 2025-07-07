@@ -31,13 +31,13 @@ type ConnectionManager struct {
 
 // Connection represents a WebSocket connection to a client
 type Connection struct {
-	ID       string
-	UserID   string
-	DraftID  uuid.UUID
-	Conn     *websocket.Conn
-	Send     chan []byte
-	Manager  *ConnectionManager
-	
+	ID      string
+	UserID  string
+	DraftID uuid.UUID
+	Conn    *websocket.Conn
+	Send    chan []byte
+	Manager *ConnectionManager
+
 	// Connection metadata
 	ConnectedAt time.Time
 	LastPing    time.Time
@@ -45,13 +45,13 @@ type Connection struct {
 
 // ConnectionConfig holds configuration for WebSocket connections
 type ConnectionConfig struct {
-	WriteTimeout     time.Duration
-	ReadTimeout      time.Duration
-	PingInterval     time.Duration
-	MaxMessageSize   int64
-	ReadBufferSize   int
-	WriteBufferSize  int
-	CheckOrigin      func(r *http.Request) bool
+	WriteTimeout    time.Duration
+	ReadTimeout     time.Duration
+	PingInterval    time.Duration
+	MaxMessageSize  int64
+	ReadBufferSize  int
+	WriteBufferSize int
+	CheckOrigin     func(r *http.Request) bool
 }
 
 // BroadcastMessage represents a message to broadcast to connections
@@ -96,7 +96,7 @@ func NewConnectionManager(config ConnectionConfig) *ConnectionManager {
 // Start begins processing broadcast messages
 func (cm *ConnectionManager) Start(ctx context.Context) {
 	log.Info().Msg("connection manager started")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -116,7 +116,6 @@ func (cm *ConnectionManager) UpgradeConnection(w http.ResponseWriter, r *http.Re
 		return fmt.Errorf("failed to upgrade connection: %w", err)
 	}
 
-	// Create connection object
 	connection := &Connection{
 		ID:          uuid.New().String(),
 		UserID:      userID,
@@ -127,8 +126,6 @@ func (cm *ConnectionManager) UpgradeConnection(w http.ResponseWriter, r *http.Re
 		ConnectedAt: time.Now(),
 		LastPing:    time.Now(),
 	}
-
-	// Register the connection
 	cm.registerConnection(connection)
 
 	// Start connection handlers

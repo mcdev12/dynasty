@@ -1,4 +1,4 @@
-package outbox
+package worker
 
 import (
 	"context"
@@ -18,9 +18,4 @@ type OutboxEvent struct {
 
 type EventPublisher interface {
 	Publish(ctx context.Context, event OutboxEvent) error
-}
-
-type OutboxRelay interface {
-	Start(ctx context.Context) error
-	Stop() error
 }

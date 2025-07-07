@@ -95,10 +95,10 @@ func (s *Service) Stop() error {
 func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	log.Info().Msg("registering WebSocket routes")
 	s.wsHandler.RegisterRoutes(mux)
-	
+
 	log.Info().Msg("registering state API routes")
 	s.stateHandler.RegisterStateRoutes(mux)
-	
+
 	log.Info().Msg("all draft gateway routes registered")
 }
 
@@ -118,43 +118,4 @@ func (s *Service) HandleDraftConnection(w http.ResponseWriter, r *http.Request) 
 // BroadcastEvent allows manual event broadcasting (useful for testing)
 func (s *Service) BroadcastEvent(draftID uuid.UUID, event *DraftEvent) {
 	s.connectionManager.BroadcastToDraft(draftID, event)
-}
-
-// IntegrationExample shows how to integrate the gateway into the main application
-func IntegrationExample() {
-	// This would go in your main.go or services.go
-	/*
-		// In setupServices function:
-
-		// Create draft gateway
-		gatewayConfig := gateway.DefaultConfig()
-		gatewayConfig.JetStreamConfig.URL = "nats://localhost:4222" // Or from env/config
-
-		// Create state provider using the draft app
-		stateProvider := gateway.NewDraftStateProvider(services.Draft.app)
-
-		draftGateway, err := gateway.NewService(gatewayConfig, stateProvider)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to create draft gateway")
-		}
-
-		// Add to services struct
-		services.DraftGateway = draftGateway
-
-		// In main.go after setting up services:
-
-		// Start draft gateway in background
-		go func() {
-			if err := services.DraftGateway.Start(ctx); err != nil {
-				log.Error().Err(err).Msg("draft gateway failed")
-			}
-		}()
-
-		// In registerServices function in server.go:
-
-		// Register draft gateway WebSocket routes
-		if services.DraftGateway != nil {
-			services.DraftGateway.RegisterRoutes(mux)
-		}
-	*/
 }

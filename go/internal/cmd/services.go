@@ -3,10 +3,12 @@ package main
 import (
 	"database/sql"
 
-	"github.com/mcdev12/dynasty/go/internal/draft"
-	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
-	"github.com/mcdev12/dynasty/go/internal/draft/gateway"
-	"github.com/mcdev12/dynasty/go/internal/draft/repository"
+	draftdraft "github.com/mcdev12/dynasty/go/internal/draft/draft"
+	draftdb "github.com/mcdev12/dynasty/go/internal/draft/draft/db"
+	"github.com/mcdev12/dynasty/go/internal/draft/outbox"
+	outboxdb "github.com/mcdev12/dynasty/go/internal/draft/outbox/db"
+	"github.com/mcdev12/dynasty/go/internal/draft/pick"
+	pickdb "github.com/mcdev12/dynasty/go/internal/draft/pick/db"
 	"github.com/mcdev12/dynasty/go/internal/fantasyteam"
 	fantasyteamdb "github.com/mcdev12/dynasty/go/internal/fantasyteam/db"
 	"github.com/mcdev12/dynasty/go/internal/leagues"
@@ -23,14 +25,14 @@ import (
 )
 
 type Services struct {
-	Teams        *teams.Service
-	Players      *player.Service
-	Users        *users.Service
-	League       *leagues.Service
-	FantasyTeam  *fantasyteam.Service
-	Roster       *roster.Service
-	Draft        *draft.Service
-	DraftGateway *gateway.Service
+	Teams             *teams.Service
+	Players           *player.Service
+	Users             *users.Service
+	League            *leagues.Service
+	FantasyTeam       *fantasyteam.Service
+	Roster            *roster.Service
+	DraftService      *draftdraft.Service
+	DraftPickService  *pick.Service
 }
 
 func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Services {
@@ -73,24 +75,38 @@ func setupServices(database *sql.DB, plugins map[string]base.SportPlugin) *Servi
 	rosterApp := roster.NewApp(rosterRepo)
 	rosterService := roster.NewService(rosterApp, fantasyTeamService, playerService)
 
-	// Draft Service
+	// Draft Services Setup (simplified for monolith - avoiding circular dependencies for now)
 	draftQueries := draftdb.New(database)
-	draftRepo := repository.NewRepository(draftQueries)
-	draftPickRepo := repository.NewDraftPickRepository(draftQueries, database)
-	draftApp := draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
+	pickQueries := pickdb.New(database)
+	outboxQueries := outboxdb.New(database)
 
-	// 1) Create the RandomStrategy, injecting draftApp (which implements ListAvailable… & ClaimNext…)
-	randStrat := draft.NewRandomStrategy(draftApp)
-	draftOrchestrator := draft.NewOrchestrator(draftApp, randStrat, int32(100))
-	draftService := draft.NewService(draftApp, draftOrchestrator)
+	// Draft app and service
+	draftRepo := draftdraft.NewRepository(draftQueries)
+	draftApp := draftdraft.NewApp(draftRepo)
+
+	// Outbox app
+	outboxRepo := outbox.NewRepository(outboxQueries)
+	outboxApp := outbox.NewApp(outboxRepo)
+
+	// Create draft service with outbox app and league service
+	draftService := draftdraft.NewService(draftApp, outboxApp, leagueService)
+
+	// Draft pick app and service
+	draftPickRepo := pick.NewRepository(pickQueries, database)
+	pickApp := pick.NewApp(draftPickRepo)
+	pickService := pick.NewService(pickApp, draftService, outboxApp)
+
+	// NOTE: Orchestrator is now a separate binary - see go/internal/draft/orchestrator/cmd/main.go
+	// It runs independently and subscribes to domain events via the message bus
 
 	return &Services{
-		Teams:       teamsService,
-		Players:     playerService,
-		Users:       userService,
-		League:      leagueService,
-		FantasyTeam: fantasyTeamService,
-		Roster:      rosterService,
-		Draft:       draftService,
+		Teams:            teamsService,
+		Players:          playerService,
+		Users:            userService,
+		League:           leagueService,
+		FantasyTeam:      fantasyTeamService,
+		Roster:           rosterService,
+		DraftService:     draftService,
+		DraftPickService: pickService,
 	}
 }

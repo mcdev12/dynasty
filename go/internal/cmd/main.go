@@ -56,24 +56,33 @@ func main() {
 	// Setup services
 	services := setupServices(database, plugins)
 
-	// Start the draft scheduler in background
+	// NOTE: Draft orchestrator now runs as a separate binary
+	// See go/internal/draft/orchestrator/cmd/main.go
+
+	// Setup HTTP/gRPC server
+	server := setupServer(services)
+
+	// Start server in goroutine
 	go func() {
-		if err := services.Draft.RunScheduler(ctx); err != nil {
-			log.Fatal().
+		log.Info().
+			Str("addr", server.Addr).
+			Msg("Server starting")
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error().
 				Err(err).
-				Msg("draft scheduler exited with error")
+				Msg("Server terminated unexpectedly")
 		}
 	}()
 
-	// Setup and start HTTP/gRPC server
-	server := setupServer(services)
+	// Wait for shutdown signal
+	<-ctx.Done()
+	log.Info().Msg("Shutdown signal received")
 
-	log.Info().
-		Str("addr", server.Addr).
-		Msg("Server starting")
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal().
+	// Graceful shutdown
+	if err := server.Shutdown(context.Background()); err != nil {
+		log.Error().
 			Err(err).
-			Msg("Server terminated unexpectedly")
+			Msg("Server shutdown failed")
 	}
+	log.Info().Msg("Server shutdown complete")
 }

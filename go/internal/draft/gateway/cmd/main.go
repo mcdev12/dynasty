@@ -13,12 +13,18 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/mcdev12/dynasty/go/internal/dbconfig"
-	"github.com/mcdev12/dynasty/go/internal/draft"
-	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
+	draftdraft "github.com/mcdev12/dynasty/go/internal/draft/draft"
+	draftdb "github.com/mcdev12/dynasty/go/internal/draft/draft/db"
 	"github.com/mcdev12/dynasty/go/internal/draft/gateway"
-	"github.com/mcdev12/dynasty/go/internal/draft/repository"
+	"github.com/mcdev12/dynasty/go/internal/draft/outbox"
+	outboxdb "github.com/mcdev12/dynasty/go/internal/draft/outbox/db"
+	"github.com/mcdev12/dynasty/go/internal/draft/pick"
+	pickdb "github.com/mcdev12/dynasty/go/internal/draft/pick/db"
+	"github.com/mcdev12/dynasty/go/internal/genproto/draft/v1/draftv1connect"
 	"github.com/mcdev12/dynasty/go/internal/leagues"
 	leaguedb "github.com/mcdev12/dynasty/go/internal/leagues/db"
+	"github.com/mcdev12/dynasty/go/internal/users"
+	usersdb "github.com/mcdev12/dynasty/go/internal/users/db"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -58,8 +64,8 @@ func main() {
 		Str("port", port).
 		Msg("starting draft gateway")
 
-	// Setup draft app for state provider
-	draftApp := setupDraftApp(db)
+	// Setup service clients for state provider
+	draftService, draftPickService := setupServiceClients(db)
 
 	// Create gateway configuration
 	gatewayConfig := gateway.Config{
@@ -78,7 +84,7 @@ func main() {
 	}
 
 	// Create state provider
-	stateProvider := gateway.NewDraftStateProvider(draftApp)
+	stateProvider := gateway.NewDraftStateProvider(draftService, draftPickService)
 
 	// Create gateway service
 	gatewayService, err := gateway.NewService(gatewayConfig, stateProvider)
@@ -94,7 +100,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("API routes are working!"))
 	})
-	
+
 	// Register gateway routes (WebSocket and REST)
 	gatewayService.RegisterRoutes(mux)
 
@@ -111,7 +117,7 @@ func main() {
 		fmt.Fprintf(w, `{"service":"draft-gateway","version":"1.0.0","connections":%d}`,
 			stats["total_connections"])
 	})
-	
+
 	// Debug endpoint to list all routes
 	mux.HandleFunc("/debug/routes", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -177,18 +183,37 @@ func main() {
 	log.Info().Msg("draft gateway shutdown complete")
 }
 
-func setupDraftApp(db *sql.DB) draft.DraftApp {
+func setupServiceClients(db *sql.DB) (draftv1connect.DraftServiceClient, draftv1connect.DraftPickServiceClient) {
 	// Setup queries
 	draftQueries := draftdb.New(db)
+	pickQueries := pickdb.New(db)
+	outboxQueries := outboxdb.New(db)
 	leagueQueries := leaguedb.New(db)
+	userQueries := usersdb.New(db)
 
 	// Setup repositories
-	draftRepo := repository.NewRepository(draftQueries)
-	draftPickRepo := repository.NewDraftPickRepository(draftQueries, db)
+	draftRepo := draftdraft.NewRepository(draftQueries)
+	draftPickRepo := pick.NewRepository(pickQueries, db)
+	outboxRepo := outbox.NewRepository(outboxQueries)
 	leagueRepo := leagues.NewRepository(leagueQueries)
+	userRepo := users.NewRepository(userQueries)
 
-	// Create draft app
-	return draft.NewApp(draftRepo, draftPickRepo, leagueRepo)
+	// Setup apps
+	draftApp := draftdraft.NewApp(draftRepo)
+	pickApp := pick.NewApp(draftPickRepo)
+	outboxApp := outbox.NewApp(outboxRepo)
+	leagueApp := leagues.NewApp(leagueRepo)
+	userApp := users.NewApp(userRepo)
+
+	// Create services (these will act as local clients for the gateway)
+	userService := users.NewService(userApp)
+	leagueService := leagues.NewService(leagueApp, userService)
+
+	// Create draft service with outbox app and league service
+	draftService := draftdraft.NewService(draftApp, outboxApp, leagueService)
+	pickService := pick.NewService(pickApp, draftService, outboxApp)
+
+	return draftService, pickService
 }
 
 func getEnv(key, defaultValue string) string {

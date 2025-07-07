@@ -1,14 +1,13 @@
-package outbox
+package worker
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	draftdb "github.com/mcdev12/dynasty/go/internal/draft/db"
 	"github.com/rs/zerolog/log"
-	"time"
 )
 
 type ListenerConfig struct {
@@ -38,16 +37,21 @@ type Publisher interface {
 	Publish(ctx context.Context, event OutboxEvent) error
 }
 
+// OutboxApp defines the app interface for outbox operations
+type OutboxApp interface {
+	GetEventByID(ctx context.Context, eventID uuid.UUID) (*OutboxEvent, error)
+	MarkEventSent(ctx context.Context, eventID uuid.UUID) error
+	FetchUnsentEvents(ctx context.Context, limit int32) ([]OutboxEvent, error)
+}
+
 type Listener struct {
-	db        *sql.DB
-	queries   *draftdb.Queries
+	app       OutboxApp
 	listener  *pq.Listener
 	publisher Publisher
 	cfg       ListenerConfig
 }
 
-// TODO worker pool if we need to in the future
-func NewListener(dbConn *sql.DB, publisher Publisher, cfg ListenerConfig) (*Listener, error) {
+func NewListener(app OutboxApp, publisher Publisher, cfg ListenerConfig) (*Listener, error) {
 	l := pq.NewListener(
 		cfg.DatabaseURL,
 		10*time.Second,
@@ -67,8 +71,7 @@ func NewListener(dbConn *sql.DB, publisher Publisher, cfg ListenerConfig) (*List
 		Msg("listening for notifications")
 
 	return &Listener{
-		db:        dbConn,
-		queries:   draftdb.New(dbConn),
+		app:       app,
 		listener:  l,
 		publisher: publisher,
 		cfg:       cfg,
@@ -127,25 +130,18 @@ func (l *Listener) handleNotification(ctx context.Context, extra string) error {
 		return fmt.Errorf("invalid event ID in notification: %w", err)
 	}
 
-	row, err := l.queries.FetchOutboxByID(ctx, id)
+	event, err := l.app.GetEventByID(ctx, id)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to fetch outbox event")
 		return fmt.Errorf("failed to fetch outbox event: %w", err)
 	}
 
-	event := OutboxEvent{
-		ID:        row.ID,
-		DraftID:   row.DraftID,
-		EventType: row.EventType,
-		Payload:   row.Payload,
-	}
-
-	err = l.publishWithRetry(ctx, event)
+	err = l.publishWithRetry(ctx, *event)
 	if err != nil {
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
 
-	if err := l.queries.MarkOutboxSent(ctx, id); err != nil {
+	if err := l.app.MarkEventSent(ctx, id); err != nil {
 		log.Error().Err(err).Str("event_id", id.String()).Msg("failed to mark outbox event as sent")
 		return err
 	}
@@ -157,28 +153,21 @@ func (l *Listener) handleNotification(ctx context.Context, extra string) error {
 // TODO Fix int32 type on batch size
 // processUnsent processes unsent message in our draft outbox.
 func (l *Listener) processUnsent(ctx context.Context) error {
-	unsent, err := l.queries.FetchUnsentOutbox(ctx, l.cfg.BatchSize)
+	unsent, err := l.app.FetchUnsentEvents(ctx, l.cfg.BatchSize)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to fetch unsent outbox events")
 		return fmt.Errorf("failed to fetch unsent outbox events: %w", err)
 	}
 
 	for _, event := range unsent {
-		outboxEvent := OutboxEvent{
-			ID:        event.ID,
-			DraftID:   event.DraftID,
-			EventType: event.EventType,
-			Payload:   event.Payload,
-		}
-
-		err := l.publishWithRetry(ctx, outboxEvent)
+		err := l.publishWithRetry(ctx, event)
 		if err != nil {
 			log.Error().Err(err).Str("event_id", event.ID.String()).Msg("failed to publish event")
 			continue
 		}
 
-		if err := l.queries.MarkOutboxSent(ctx, outboxEvent.ID); err != nil {
-			log.Error().Err(err).Str("event_id", outboxEvent.ID.String()).Msg("failed to mark outbox event as sent")
+		if err := l.app.MarkEventSent(ctx, event.ID); err != nil {
+			log.Error().Err(err).Str("event_id", event.ID.String()).Msg("failed to mark outbox event as sent")
 			continue
 		}
 	}
@@ -211,7 +200,7 @@ func (l *Listener) publishWithRetry(ctx context.Context, event OutboxEvent) erro
 			continue
 		}
 
-		if err := l.queries.MarkOutboxSent(ctx, event.ID); err != nil {
+		if err := l.app.MarkEventSent(ctx, event.ID); err != nil {
 			log.Error().Err(err).Str("event_id", event.ID.String()).Msg("failed to mark outbox event as sent")
 			return err
 		}

@@ -4,30 +4,29 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/mcdev12/dynasty/go/internal/draft/events"
 )
 
 // DraftEvent represents the base structure for all draft events
 type DraftEvent struct {
-	ID        string          `json:"id"`         // Event UUID
-	DraftID   string          `json:"draft_id"`   // Draft UUID  
-	Type      EventType       `json:"type"`       // Event type
-	Timestamp time.Time       `json:"timestamp"`  // Event creation time
-	Data      json.RawMessage `json:"data"`       // Event-specific payload
+	ID        string          `json:"id"`        // Event UUID
+	DraftID   string          `json:"draft_id"`  // Draft UUID
+	Type      EventType       `json:"type"`      // Event type
+	Timestamp time.Time       `json:"timestamp"` // Event creation time
+	Data      json.RawMessage `json:"data"`      // Event-specific payload
 }
 
 // EventType represents the type of draft event
 type EventType string
 
 const (
-	EventTypePickMade      EventType = "PickMade"
-	EventTypePickStarted   EventType = "PickStarted"
-	EventTypeDraftStarted  EventType = "DraftStarted"
-	EventTypeDraftPaused   EventType = "DraftPaused"
-	EventTypeDraftResumed  EventType = "DraftResumed"
+	EventTypePickMade       EventType = "PickMade"
+	EventTypePickStarted    EventType = "PickStarted"
+	EventTypeDraftStarted   EventType = "DraftStarted"
+	EventTypeDraftPaused    EventType = "DraftPaused"
+	EventTypeDraftResumed   EventType = "DraftResumed"
 	EventTypeDraftCompleted EventType = "DraftCompleted"
-	EventTypeTimerTick     EventType = "TimerTick"
+	EventTypeTimerTick      EventType = "TimerTick"
 )
 
 // Event Payloads are now in the events package to avoid cyclic imports
@@ -38,72 +37,6 @@ type TimerTickPayload struct {
 	TeamID           string    `json:"team_id"`
 	TimeRemainingSec int       `json:"time_remaining_sec"`
 	TickedAt         time.Time `json:"ticked_at"`
-}
-
-// Helper functions to create events
-
-// NewPickMadeEvent creates a new PickMade event
-func NewPickMadeEvent(draftID uuid.UUID, payload events.PickMadePayload) (*DraftEvent, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DraftEvent{
-		ID:        uuid.New().String(),
-		DraftID:   draftID.String(),
-		Type:      EventTypePickMade,
-		Timestamp: time.Now(),
-		Data:      data,
-	}, nil
-}
-
-// NewPickStartedEvent creates a new PickStarted event
-func NewPickStartedEvent(draftID uuid.UUID, payload events.PickStartedPayload) (*DraftEvent, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DraftEvent{
-		ID:        uuid.New().String(),
-		DraftID:   draftID.String(),
-		Type:      EventTypePickStarted,
-		Timestamp: time.Now(),
-		Data:      data,
-	}, nil
-}
-
-// NewDraftStartedEvent creates a new DraftStarted event
-func NewDraftStartedEvent(draftID uuid.UUID, payload events.DraftStartedPayload) (*DraftEvent, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DraftEvent{
-		ID:        uuid.New().String(),
-		DraftID:   draftID.String(),
-		Type:      EventTypeDraftStarted,
-		Timestamp: time.Now(),
-		Data:      data,
-	}, nil
-}
-
-// NewDraftCompletedEvent creates a new DraftCompleted event
-func NewDraftCompletedEvent(draftID uuid.UUID, payload events.DraftCompletedPayload) (*DraftEvent, error) {
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return &DraftEvent{
-		ID:        uuid.New().String(),
-		DraftID:   draftID.String(),
-		Type:      EventTypeDraftCompleted,
-		Timestamp: time.Now(),
-		Data:      data,
-	}, nil
 }
 
 // ParseEventPayload parses event data into the appropriate payload struct

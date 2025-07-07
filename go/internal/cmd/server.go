@@ -81,8 +81,12 @@ func registerServices(mux *http.ServeMux, services *Services) {
 	mux.Handle(rosterServicePath, rosterServiceHandler)
 
 	// Draft service
-	draftServicePath, draftServiceHandler := draftv1connect.NewDraftServiceHandler(services.Draft)
+	draftServicePath, draftServiceHandler := draftv1connect.NewDraftServiceHandler(services.DraftService)
 	mux.Handle(draftServicePath, draftServiceHandler)
+
+	// Draft pick service
+	draftPickServicePath, draftPickServiceHandler := draftv1connect.NewDraftPickServiceHandler(services.DraftPickService)
+	mux.Handle(draftPickServicePath, draftPickServiceHandler)
 }
 
 func setupReflection(mux *http.ServeMux) {
@@ -94,6 +98,7 @@ func setupReflection(mux *http.ServeMux) {
 		fantasyteamv1connect.FantasyTeamServiceName,
 		rosterv1connect.RosterServiceName,
 		draftv1connect.DraftServiceName,
+		draftv1connect.DraftPickServiceName,
 	)
 	mux.Handle(grpcreflect.NewHandlerV1(reflector))
 	mux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))

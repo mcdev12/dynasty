@@ -44,19 +44,6 @@ func (p *PickState) CalculateTimeRemaining() int {
 	return remaining
 }
 
-// CalculateTimeRemainingWithClockSync calculates remaining time with server clock sync
-func (p *PickState) CalculateTimeRemainingWithClockSync(serverTime time.Time) int {
-	if p.TimeoutAt.IsZero() {
-		return 0
-	}
-
-	remaining := int(p.TimeoutAt.Sub(serverTime).Seconds())
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
-}
-
 // UpdateTimeRemaining updates the time remaining field
 func (p *PickState) UpdateTimeRemaining() {
 	p.TimeRemainingSec = p.CalculateTimeRemaining()

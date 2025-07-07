@@ -15,6 +15,8 @@ import (
 
 	"github.com/mcdev12/dynasty/go/internal/dbconfig"
 	"github.com/mcdev12/dynasty/go/internal/draft/outbox"
+	outboxdb "github.com/mcdev12/dynasty/go/internal/draft/outbox/db"
+	"github.com/mcdev12/dynasty/go/internal/draft/outbox/worker"
 )
 
 func main() {
@@ -45,11 +47,11 @@ func main() {
 		Msg("connected to database")
 
 	// JetStream publisher
-	jsCfg := outbox.DefaultJetStreamConfig()
+	jsCfg := worker.DefaultJetStreamConfig()
 	if url := os.Getenv("NATS_URL"); url != "" {
 		jsCfg.URL = url
 	}
-	publisher, err := outbox.NewJetStreamPublisher(jsCfg)
+	publisher, err := worker.NewJetStreamPublisher(jsCfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("create JetStream publisher")
 	}
@@ -60,7 +62,7 @@ func main() {
 	}()
 
 	// Listener config
-	ltCfg := outbox.DefaultListenerConfig()
+	ltCfg := worker.DefaultListenerConfig()
 	ltCfg.DatabaseURL = dsn
 	if iv := os.Getenv("FALLBACK_INTERVAL"); iv != "" {
 		if d, err := time.ParseDuration(iv); err == nil {
@@ -68,7 +70,12 @@ func main() {
 		}
 	}
 
-	listener, err := outbox.NewListener(db, publisher, ltCfg)
+	// Create outbox repository and app
+	queries := outboxdb.New(db)
+	repo := outbox.NewRepository(queries)
+	app := outbox.NewApp(repo)
+
+	listener, err := worker.NewListener(app, publisher, ltCfg)
 	if err != nil {
 		log.Fatal().Err(err).Msg("create outbox listener")
 	}

@@ -17,10 +17,14 @@ service DraftService {
   rpc StartDraft(StartDraftRequest) returns (StartDraftResponse);
   rpc PauseDraft(PauseDraftRequest) returns (PauseDraftResponse);
   rpc ResumeDraft(ResumeDraftRequest) returns (ResumeDraftResponse);
+  rpc CompleteDraft(CompleteDraftRequest) returns (CompleteDraftResponse);
   rpc DeleteDraft(DeleteDraftRequest) returns (DeleteDraftResponse);
 
-  // Picks
-  rpc MakePick(MakePickRequest) returns (MakePickResponse);
+  // Scheduler Operations
+  rpc FetchNextDeadline(FetchNextDeadlineRequest) returns (FetchNextDeadlineResponse);
+  rpc FetchDraftsDueForPick(FetchDraftsDueForPickRequest) returns (FetchDraftsDueForPickResponse);
+  rpc UpdateNextDeadline(UpdateNextDeadlineRequest) returns (UpdateNextDeadlineResponse);
+  rpc ClearNextDeadline(ClearNextDeadlineRequest) returns (ClearNextDeadlineResponse);
 }
 
 // Requests and responses:
@@ -76,16 +80,20 @@ message PauseDraftRequest {
   string draft_id = 1;
 }
 
-message PauseDraftResponse {
-  string draft_id = 1;
-}
+message PauseDraftResponse {}
 
 message ResumeDraftRequest {
   string draft_id = 1;
 }
 
-message ResumeDraftResponse {
+message ResumeDraftResponse {}
 
+message CompleteDraftRequest {
+  string draft_id = 1;
+}
+
+message CompleteDraftResponse {
+  Draft draft = 1;
 }
 
 message DeleteDraftRequest {
@@ -94,15 +102,36 @@ message DeleteDraftRequest {
 
 message DeleteDraftResponse {}
 
+// Scheduler Messages
+message FetchNextDeadlineRequest {}
 
-message MakePickRequest {
-  string pick_id = 1;
-  string draft_id = 2;
-  string team_id = 3;
-  string player_id = 4;
-  int32 overall_pick = 5;
+message FetchNextDeadlineResponse {
+  optional NextDeadline next_deadline = 1;
 }
 
-message MakePickResponse {
+message NextDeadline {
+  string draft_id = 1;
+  optional google.protobuf.Timestamp deadline = 2;
 }
+
+message FetchDraftsDueForPickRequest {
+  int32 limit = 1;
+}
+
+message FetchDraftsDueForPickResponse {
+  repeated string draft_ids = 1;
+}
+
+message UpdateNextDeadlineRequest {
+  string draft_id = 1;
+  optional google.protobuf.Timestamp deadline = 2;
+}
+
+message UpdateNextDeadlineResponse {}
+
+message ClearNextDeadlineRequest {
+  string draft_id = 1;
+}
+
+message ClearNextDeadlineResponse {}
 
