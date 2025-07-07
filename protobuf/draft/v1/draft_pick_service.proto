@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package draft.v1;
+
+import "google/protobuf/timestamp.proto";
+import "draft/v1/draft.proto";
+
+option go_package = "github.com/mcdev12/dynasty/go/internal/genproto/draft/v1;draftv1";
+
+// RPC service for managing draft picks in the fantasy platform.
+service DraftPickService {
+  // Pick Operations
+  rpc MakePick(MakePickRequest) returns (MakePickResponse);
+  rpc GetDraftPick(GetDraftPickRequest) returns (GetDraftPickResponse);
+  rpc GetDraftPicksByDraft(GetDraftPicksByDraftRequest) returns (GetDraftPicksByDraftResponse);
+  rpc GetDraftPicksByRound(GetDraftPicksByRoundRequest) returns (GetDraftPicksByRoundResponse);
+  rpc GetNextPickForDraft(GetNextPickForDraftRequest) returns (GetNextPickForDraftResponse);
+  rpc CountRemainingPicks(CountRemainingPicksRequest) returns (CountRemainingPicksResponse);
+  
+  // Auto-Pick Operations
+  rpc ClaimNextPickSlot(ClaimNextPickSlotRequest) returns (ClaimNextPickSlotResponse);
+  
+  // Draft Management
+  rpc PrepopulateDraftPicks(PrepopulateDraftPicksRequest) returns (PrepopulateDraftPicksResponse);
+  rpc ListAvailablePlayersForDraft(ListAvailablePlayersForDraftRequest) returns (ListAvailablePlayersForDraftResponse);
+  
+  // Administration
+  rpc UpdateDraftPickPlayer(UpdateDraftPickPlayerRequest) returns (UpdateDraftPickPlayerResponse);
+  rpc DeleteDraftPicksByDraft(DeleteDraftPicksByDraftRequest) returns (DeleteDraftPicksByDraftResponse);
+}
+
+// Pick Operations Messages
+message MakePickRequest {
+  string pick_id = 1;
+  string draft_id = 2;
+  string team_id = 3;
+  string player_id = 4;
+  int32 overall_pick = 5;
+}
+
+message MakePickResponse {
+  DraftPick pick = 1;
+}
+
+message GetDraftPickRequest {
+  string pick_id = 1;
+}
+
+message GetDraftPickResponse {
+  DraftPick pick = 1;
+}
+
+message GetDraftPicksByDraftRequest {
+  string draft_id = 1;
+}
+
+message GetDraftPicksByDraftResponse {
+  repeated DraftPick picks = 1;
+}
+
+message GetDraftPicksByRoundRequest {
+  string draft_id = 1;
+  int32 round = 2;
+}
+
+message GetDraftPicksByRoundResponse {
+  repeated DraftPick picks = 1;
+}
+
+message GetNextPickForDraftRequest {
+  string draft_id = 1;
+}
+
+message GetNextPickForDraftResponse {
+  DraftPick pick = 1;
+}
+
+message CountRemainingPicksRequest {
+  string draft_id = 1;
+}
+
+message CountRemainingPicksResponse {
+  int32 remaining_picks = 1;
+}
+
+// Auto-Pick Messages
+message ClaimNextPickSlotRequest {
+  string draft_id = 1;
+}
+
+message ClaimNextPickSlotResponse {
+  PickSlot slot = 1;
+}
+
+message PickSlot {
+  string pick_id = 1;
+  string team_id = 2;
+  int32 overall_pick = 3;
+}
+
+// Draft Management Messages
+message PrepopulateDraftPicksRequest {
+  string draft_id = 1;
+  DraftType draft_type = 2;
+  DraftSettings settings = 3;
+}
+
+message PrepopulateDraftPicksResponse {
+  int32 picks_created = 1;
+}
+
+message ListAvailablePlayersForDraftRequest {
+  string draft_id = 1;
+}
+
+message ListAvailablePlayersForDraftResponse {
+  repeated AvailablePlayer players = 1;
+}
+
+message AvailablePlayer {
+  string id = 1;
+  string full_name = 2;
+  string team_id = 3;
+}
+
+// Administration Messages
+message UpdateDraftPickPlayerRequest {
+  string pick_id = 1;
+  string player_id = 2;
+  optional double auction_amount = 3;
+  bool keeper_pick = 4;
+}
+
+message UpdateDraftPickPlayerResponse {
+  DraftPick pick = 1;
+}
+
+message DeleteDraftPicksByDraftRequest {
+  string draft_id = 1;
+}
+
+message DeleteDraftPicksByDraftResponse {
+  int32 deleted_count = 1;
+}

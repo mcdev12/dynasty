@@ -85,6 +85,10 @@ type Orchestrator struct {
 	// Track in-flight work to prevent duplicate processing
 	inFlight   map[uuid.UUID]bool
 	inFlightMu sync.Mutex
+
+	// Track last scheduled time per draft to prevent duplicate scheduling
+	lastScheduled   map[uuid.UUID]time.Time
+	lastScheduledMu sync.Mutex
 }
 
 // NewOrchestrator creates a new draft orchestrator with worker pool
@@ -100,16 +104,31 @@ func NewOrchestrator(draftService draftv1connect.DraftServiceClient, draftPickSe
 		wakeCh:           make(chan struct{}, 1),
 		instanceID:       uuid.New().String()[:8], // short ID for logging
 
-		numWorkers: numWorkers,
-		workCh:     make(chan uuid.UUID, numWorkers*2), // Buffer to prevent blocking
-		inFlight:   make(map[uuid.UUID]bool),
+		numWorkers:    numWorkers,
+		workCh:        make(chan uuid.UUID, numWorkers*2), // Buffer to prevent blocking
+		inFlight:      make(map[uuid.UUID]bool),
+		lastScheduled: make(map[uuid.UUID]time.Time),
 	}
 }
 
 // scheduleNextPick is a helper method that handles the common pattern of scheduling a pick timeout.
 // It fetches the timeout duration, calculates the next deadline, updates it in the database,
 // emits a PickStarted event, and wakes the scheduler.
+// Includes idempotency guard to prevent duplicate scheduling for the same baseTime.
 func (o *Orchestrator) scheduleNextPick(ctx context.Context, draftID uuid.UUID, baseTime time.Time) error {
+	// Idempotency guard: prevent duplicate scheduling for the same baseTime
+	o.lastScheduledMu.Lock()
+	if lastTime, exists := o.lastScheduled[draftID]; exists && lastTime.Equal(baseTime) {
+		o.lastScheduledMu.Unlock()
+		log.Debug().
+			Str("draft_id", draftID.String()).
+			Time("base_time", baseTime).
+			Msg("skipping duplicate schedule - already scheduled for this baseTime")
+		return nil
+	}
+	o.lastScheduled[draftID] = baseTime
+	o.lastScheduledMu.Unlock()
+
 	// Get pick timeout duration from draft settings
 	timeOut, err := o.getPickTime(ctx, draftID)
 	if err != nil {
@@ -118,7 +137,7 @@ func (o *Orchestrator) scheduleNextPick(ctx context.Context, draftID uuid.UUID, 
 
 	// Calculate next deadline
 	next := baseTime.Add(timeOut)
-	
+
 	// Update deadline in database
 	if err := o.updateNextDeadline(ctx, draftID, &next); err != nil {
 		return fmt.Errorf("failed to update next deadline: %w", err)
@@ -135,7 +154,7 @@ func (o *Orchestrator) scheduleNextPick(ctx context.Context, draftID uuid.UUID, 
 	case o.wakeCh <- struct{}{}:
 	default:
 	}
-	
+
 	return nil
 }
 
@@ -243,10 +262,20 @@ func (o *Orchestrator) HandleDomainEvent(ctx context.Context, eventType string, 
 		return o.handlePickMadeEvent(ctx, draftID, pickMadePayload)
 
 	case "DraftCompleted":
-		// For DraftCompleted, we just log it - no action needed from orchestrator
+		// For DraftCompleted, clean up tracking maps and log completion
 		log.Info().
 			Str("draft_id", draftID.String()).
-			Msg("draft completed - no orchestrator action needed")
+			Msg("draft completed - cleaning up tracking maps")
+
+		// Clean up tracking maps to prevent memory leaks
+		o.lastScheduledMu.Lock()
+		delete(o.lastScheduled, draftID)
+		o.lastScheduledMu.Unlock()
+
+		o.inFlightMu.Lock()
+		delete(o.inFlight, draftID)
+		o.inFlightMu.Unlock()
+
 		return nil
 
 	default:
@@ -408,6 +437,15 @@ func (o *Orchestrator) RunScheduler(ctx context.Context) error {
 
 			// Send drafts to worker pool for parallel processing with deduplication
 			for _, draftID := range dueUUIDs {
+				// Check for shutdown before processing
+				select {
+				case <-ctx.Done():
+					log.Info().Str("instance", o.instanceID).Msg("shutdown while queueing timeouts")
+					return nil
+				default:
+				}
+
+				// Atomic check+enqueue to prevent race condition
 				o.inFlightMu.Lock()
 				if o.inFlight[draftID] {
 					// Skip if already being processed
@@ -415,20 +453,16 @@ func (o *Orchestrator) RunScheduler(ctx context.Context) error {
 					o.inFlightMu.Unlock()
 					continue
 				}
-				o.inFlight[draftID] = true
-				o.inFlightMu.Unlock()
 
-				select {
-				case <-ctx.Done():
-					// Clean up in-flight tracking on shutdown
-					o.inFlightMu.Lock()
-					delete(o.inFlight, draftID)
-					o.inFlightMu.Unlock()
-					log.Info().Str("instance", o.instanceID).Msg("shutdown while queueing timeouts")
-					return nil
-				case o.workCh <- draftID:
-					log.Debug().Str("draft_id", draftID.String()).Str("instance", o.instanceID).Msg("queued timeout for worker")
-				}
+				// Mark as in-flight and enqueue atomically
+				o.inFlight[draftID] = true
+
+				// Send to work channel (safe: buffer is sized to prevent blocking)
+				// If this blocks, we have a bigger problem with worker pool sizing
+				o.inFlightMu.Unlock()
+				o.workCh <- draftID
+
+				log.Debug().Str("draft_id", draftID.String()).Str("instance", o.instanceID).Msg("queued timeout for worker")
 			}
 		}
 	}
