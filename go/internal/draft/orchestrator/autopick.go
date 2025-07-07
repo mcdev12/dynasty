@@ -52,13 +52,8 @@ func (s *RandomStrategy) SelectClaim(ctx context.Context, draftID uuid.UUID) (pi
 		return pick.MakePickRequest{}, fmt.Errorf("no available players")
 	}
 
-	log.Debug().Msg("got players")
-
 	// 2b) Choose one at random
 	choice := playersResp.Msg.Players[s.rng.Intn(len(playersResp.Msg.Players))]
-
-	log.Info().Str("player_id", choice.Id).Msg("auto-pick picked player")
-
 	// 2c) Atomically claim the next pick slot via draft pick service
 	claimReq := &draftv1.ClaimNextPickSlotRequest{
 		DraftId: draftID.String(),
@@ -74,7 +69,7 @@ func (s *RandomStrategy) SelectClaim(ctx context.Context, draftID uuid.UUID) (pi
 	log.Info().
 		Str("draft_id", draftID.String()).
 		Str("player_id", choice.Id).
-		Msg("auto-pick claimed slot")
+		Msg("auto-pick picked player slot")
 
 	// 2d) Build the MakePickRequest for the orchestrator
 	pickID, err := uuid.Parse(claimResp.Msg.Slot.PickId)
